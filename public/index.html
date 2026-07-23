@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Worldlens — live global-intelligence globe</title>
+<style>
+  :root{--bg:#050912;--card:#0d1524cc;--line:#22304a;--text:#e6edf7;--muted:#8fa0bd;
+    --cyan:#38bdf8;--green:#34d399;--amber:#fbbf24;--violet:#a78bfa;--rose:#fb7185;--orange:#fb923c;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{background:radial-gradient(1400px 700px at 78% -10%,rgba(56,189,248,.10),transparent),#050912;
+    color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  #globe{position:fixed;inset:0;z-index:0}
+  .glass{background:var(--card);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .topbar{position:fixed;top:14px;left:14px;right:14px;z-index:10;display:flex;align-items:center;gap:12px;pointer-events:none}
+  .topbar>*{pointer-events:auto}
+  .brand{display:flex;align-items:center;gap:9px;padding:8px 12px}
+  .blogo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--cyan),var(--violet));display:grid;place-items:center;font-weight:800;color:#04121f;font-size:14px}
+  .brand b{font-size:14px;font-weight:750;line-height:1}.brand small{font-size:10.5px;color:var(--muted);display:block;margin-top:2px}
+  .search{flex:1;max-width:320px;display:flex;align-items:center;gap:8px;padding:0 12px;height:40px}
+  .search input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:13.5px}
+  .search input::placeholder{color:var(--muted)}
+  .search .ic{color:var(--muted);font-size:14px}
+  .tb-links{display:flex;gap:8px;margin-left:auto}
+  .tb-links a{font-size:12px;color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:11px}
+  .tb-links a:hover{color:var(--cyan)}
+  .tb-links a.solid{background:var(--card);border:1px solid var(--line);backdrop-filter:blur(10px)}
+  .rail{position:fixed;top:74px;left:14px;z-index:10;display:flex;flex-direction:column;gap:8px;width:196px;max-height:calc(100vh - 92px);overflow-y:auto}
+  .rail::-webkit-scrollbar{width:0}
+  .layers{padding:9px 9px 6px}
+  .grp{font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:9px 5px 4px;font-weight:700;opacity:.8}
+  .grp:first-child{padding-top:2px}
+  .lay{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:6px 8px;border-radius:9px;cursor:pointer;user-select:none}
+  .lay:hover{background:rgba(56,189,248,.06)}
+  .lay i{width:10px;height:10px;border-radius:50%;flex:none;box-shadow:0 0 8px currentColor}
+  .lay .ct{margin-left:auto;font-size:10.5px;color:var(--muted)}
+  .lay.off{opacity:.36}.lay.off i{box-shadow:none}
+  /* lenses + group controls */
+  .lenses{display:flex;flex-wrap:wrap;gap:5px;padding:2px 2px 0}
+  .lens{font-size:10.5px;padding:5px 8px;border-radius:9px;border:1px solid var(--line);cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:4px;user-select:none;background:rgba(255,255,255,.02)}
+  .lens:hover{border-color:var(--cyan);color:var(--text)}
+  .lens.active{background:linear-gradient(135deg,rgba(56,189,248,.28),rgba(129,140,248,.22));border-color:var(--cyan);color:#fff;box-shadow:0 0 10px rgba(56,189,248,.2)}
+  .railhead{display:flex;justify-content:space-between;align-items:center;padding:0 4px 2px}
+  .mini-btn{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);cursor:pointer;border:1px solid var(--line);border-radius:7px;padding:2px 7px;margin-left:4px}
+  .mini-btn:hover{color:var(--cyan);border-color:var(--cyan)}
+  .grp.clk{cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+  .grp.clk:hover{color:var(--cyan)}
+  .grp .gc{font-size:9px;font-weight:600;opacity:.65}
+  .railtog{align-self:flex-start;font-size:10.5px;color:var(--muted);cursor:pointer;border:1px solid var(--line);border-radius:9px;padding:5px 10px;background:var(--card);backdrop-filter:blur(10px);user-select:none}
+  .railtog:hover{color:var(--cyan);border-color:var(--cyan)}
+  .rail.collapsed .collapsible{display:none}
+  .stress{padding:11px 12px;cursor:pointer}
+  .stress:hover{border-color:var(--cyan)}
+  .stress .lb{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .stress .v{font-size:30px;font-weight:800;letter-spacing:-1px;margin-top:2px;line-height:1}
+  .stress .band{font-size:12px;font-weight:600;margin-top:1px}
+  .stress .tap{font-size:10px;color:var(--muted);margin-top:6px}
+  .b-calm{color:var(--green)}.b-elev{color:var(--amber)}.b-tense{color:var(--orange)}.b-crit{color:var(--rose)}
+  .panel{position:fixed;top:14px;right:14px;bottom:14px;width:340px;z-index:20;display:flex;flex-direction:column;
+    transform:translateX(calc(100% + 22px));transition:transform .34s cubic-bezier(.4,0,.2,1);overflow:hidden}
+  .panel.open{transform:translateX(0)}
+  @media(max-width:640px){.panel{width:auto;left:14px}}
+  .ph{padding:15px 16px 13px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:10px}
+  .ph .em{font-size:26px;line-height:1;flex:none}
+  .ph .t{font-size:16px;font-weight:700;letter-spacing:-.2px}
+  .ph .sub{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+  .ph .x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;border:none;background:none;padding:2px 4px}
+  .ph .x:hover{color:var(--rose)}
+  .pb{padding:14px 16px;overflow-y:auto;flex:1}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+  .kv .k{color:var(--muted)}.kv .v{font-weight:600;text-align:right}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 4px}
+  .mc{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:11px;padding:9px 11px}
+  .mc .k{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .mc .v{font-size:17px;font-weight:700;margin-top:2px}.mc .s{font-size:10.5px;color:var(--muted)}
+  .mini{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px;font-weight:650}
+  .ev{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);align-items:flex-start;cursor:pointer}
+  .ev:hover{background:rgba(56,189,248,.05)}
+  .ev .ic{font-size:15px;flex:none}.ev .tx{font-size:12.5px;line-height:1.4}
+  .ev .mt{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+  .btn{display:inline-block;margin-top:14px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);color:var(--cyan);text-decoration:none;font-size:12.5px;font-weight:600;cursor:pointer;background:rgba(56,189,248,.06)}
+  .btn:hover{border-color:var(--cyan)}
+  .hint{position:fixed;bottom:16px;right:16px;z-index:10;font-size:11px;color:var(--muted);padding:8px 12px;max-width:230px;line-height:1.6}
+  @media(max-width:640px){.hint{display:none}.rail{width:164px}}
+  #loading{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:#050912;color:var(--muted);font-size:14px}
+  #loading .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--cyan);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 14px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .updated{position:fixed;bottom:16px;left:14px;z-index:10;font-size:10.5px;color:var(--muted);padding:6px 11px}
+  /* professional command header KPIs */
+  .kpis{display:flex;gap:0;align-items:stretch;padding:0;overflow:hidden}
+  .kpi{padding:7px 14px;border-right:1px solid var(--line);min-width:74px}
+  .kpi:last-child{border-right:none}
+  .kpi .kl{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+  .kpi .kv{font-size:15px;font-weight:750;letter-spacing:-.3px;margin-top:1px;line-height:1.1}
+  .kpi .kv small{font-size:10px;font-weight:600;color:var(--muted)}
+  @media(max-width:1100px){.kpis{display:none}}
+  .cbtn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:650;color:#04121f;
+    text-decoration:none;padding:8px 14px;border-radius:11px;background:linear-gradient(135deg,var(--cyan),#818cf8);cursor:pointer;border:none}
+  .cbtn:hover{filter:brightness(1.08)}
+  /* bottom status bar */
+  .statusbar{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;align-items:center;gap:16px;
+    padding:6px 16px;font-size:11px;color:var(--muted);background:linear-gradient(0deg,rgba(5,9,18,.9),transparent);pointer-events:none}
+  .statusbar b{color:var(--text);font-weight:650}
+  .statusbar .dotlive{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);display:inline-block;animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.4}}
+  .statusbar .sp{margin-left:auto}
+  @media(max-width:760px){.statusbar{font-size:10px;gap:9px}}
+</style>
+</head>
+<body>
+<div id="globe"></div>
+
+<div class="topbar">
+  <div class="brand glass"><div class="blogo">◐</div><div><b>Worldlens</b><small>live global intelligence</small></div></div>
+  <div class="glass kpis" id="kpis"></div>
+  <div class="search glass"><span class="ic">⌕</span>
+    <input id="search" placeholder="Fly to a country…" autocomplete="off" spellcheck="false"></div>
+  <div class="tb-links">
+    <span class="cbtn" onclick="showBrief()">◎ Situation Brief</span>
+    <span class="cbtn" onclick="showTrade()" style="background:linear-gradient(135deg,#34d399,#38bdf8)">💹 Trade Desk</span>
+    <a class="solid" id="liteBtn" onclick="toggleLite()" style="cursor:pointer" title="Trim bloom + satellites for weak devices">⚡ Lite</a>
+    <a class="solid" onclick="showHelp()" style="cursor:pointer">? Help</a>
+    <a href="/dashboard.html" class="solid">▤ Dashboard</a>
+    <a href="https://github.com/chrisgorzelic-cell/worldlens" target="_blank" rel="noopener" class="solid">★ GitHub</a>
+  </div>
+</div>
+
+<div class="rail" id="rail">
+  <div class="railtog" onclick="toggleRail()" title="Collapse / expand the controls">⇔ Controls</div>
+  <div class="glass layers collapsible">
+    <div class="grp" style="padding:2px 4px 5px">Lenses <span style="font-weight:400;opacity:.55;text-transform:none;letter-spacing:0">· isolate a signal</span></div>
+    <div class="lenses" id="lenses"></div>
+  </div>
+  <div class="glass layers collapsible">
+    <div class="railhead"><span class="grp" style="padding:0">Layers</span>
+      <span><span class="mini-btn" onclick="allLayers(true)">All</span><span class="mini-btn" onclick="allLayers(false)">None</span></span></div>
+    <div id="layers"></div>
+  </div>
+  <div class="glass stress" id="stressChip" onclick="showGlobal()"></div>
+  <div class="glass stress" id="skyChip" onclick="showSky()" style="padding:10px 12px"><div class="lb">Sky &amp; astrology</div><div id="skyLine" style="font-size:13px;font-weight:650;margin-top:3px">✨ loading…</div><div class="tap">tap for zodiac &amp; moon ›</div></div>
+</div>
+
+<div class="panel glass" id="panel">
+  <div class="ph"><div class="em" id="pEm">🌍</div>
+    <div><div class="t" id="pT">—</div><div class="sub" id="pS"></div></div>
+    <button class="x" onclick="closePanel()">✕</button></div>
+  <div class="pb" id="pB"></div>
+</div>
+
+<div class="hint glass">Drag to spin · scroll to zoom · <b>click a country</b> to drill in · <b>click a satellite</b> to track its orbit</div>
+<div class="updated glass" id="updated"></div>
+<div class="statusbar" id="statusbar"></div>
+
+<div id="loading"><div style="text-align:center"><div class="spin"></div>Building the globe…</div></div>
+
+<script src="https://unpkg.com/satellite.js@5.0.0/dist/satellite.min.js"></script>
+<script type="module">
+let THREE, Globe, UnrealBloomPass, solar;  // loaded via esm.sh so globe.gl + bloom share ONE three instance
+let DN_MAT=null;  // day/night terminator ShaderMaterial (leveraged from globe.gl's MIT day-night-cycle example)
+let SUN_LIGHT=null;  // directional light aligned to the sun so planets/Moon show real phases
+let BLOOM=null, LITE=false;  // Lite mode: drop bloom + trim satellites for weak devices
+const LITE_SAT_CAP=260;
+const GEO_URL="https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson";
+const GEO_FALLBACK="https://unpkg.com/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson";
+const NIGHT_SKY="https://unpkg.com/three-globe@2.30.0/example/img/night-sky.png";
+/* layer groups */
+const GROUPS=[
+  {name:"Geophysical",items:[
+    {id:"quake",label:"Earthquakes",col:"#fbbf24"},
+    {id:"hazard",label:"Hazards",col:"#fb7185"},
+    {id:"gdacs",label:"Disaster alerts",col:"#ef4444"}]},
+  {name:"Weather",items:[
+    {id:"wind",label:"Wind (3D)",col:"#7dd3fc"},
+    {id:"temp",label:"Temperature",col:"#fb923c"},
+    {id:"precip",label:"Precipitation",col:"#60a5fa"},
+    {id:"clouds",label:"Cloud cover",col:"#e2e8f0"},
+    {id:"humidity",label:"Humidity",col:"#2dd4bf"},
+    {id:"pressure",label:"Pressure",col:"#c084fc"},
+    {id:"cloudveil",label:"Cloud veil",col:"#e2e8f0"},
+    {id:"air",label:"Air quality",col:"#a3e635"}]},
+  {name:"Aviation",items:[
+    {id:"flights",label:"Flights",col:"#38bdf8"},
+    {id:"mil",label:"Military",col:"#f87171"}]},
+  {name:"Trade & supply",items:[
+    {id:"nodes_energy",label:"Energy nodes",col:"#fb923c"},
+    {id:"nodes_metals",label:"Metals & mining",col:"#a8b3c4"},
+    {id:"nodes_chips",label:"Chip fabs",col:"#38bdf8"},
+    {id:"nodes_agri",label:"Agri belts",col:"#84cc16"},
+    {id:"chokepoints",label:"Chokepoints",col:"#f472b6"},
+    {id:"traderoutes",label:"Trade flows",col:"#22d3ee"}]},
+  {name:"Space & sky",items:[
+    {id:"sats",label:"Satellites",col:"#34d399"},
+    {id:"planets",label:"Planets",col:"#fbbf24"},
+    {id:"sunmoon",label:"Sun & Moon",col:"#fde68a"},
+    {id:"constel",label:"Constellations",col:"#c7d2fe"},
+    {id:"stars",label:"Universe (stars)",col:"#818cf8"}]},
+  {name:"Presence",items:[
+    {id:"ziggy",label:"Presence",col:"#38bdf8"}]},
+  {name:"Reference",items:[
+    {id:"cities",label:"Cities",col:"#e6edf7"},
+    {id:"iss",label:"ISS",col:"#a78bfa"}]},
+];
+const on={quake:true,hazard:true,wind:true,temp:false,precip:false,clouds:false,humidity:false,
+  pressure:false,cloudveil:true,air:false,flights:false,mil:false,sats:true,planets:true,sunmoon:true,
+  constel:false,stars:true,cities:false,iss:true,ziggy:true,
+  gdacs:true,nodes_energy:false,nodes_metals:false,nodes_chips:false,nodes_agri:false,chokepoints:false,traderoutes:false};
+/* per-planet colours + emoji (astro glyphs tofu in the WebGL label font, so use emoji) */
+const PLANET_COL={Mercury:"#cbd5e1",Venus:"#fde68a",Mars:"#f87171",Jupiter:"#fbbf24",
+  Saturn:"#fcd34d",Uranus:"#67e8f9",Neptune:"#60a5fa",Pluto:"#d6a06a"};
+const PLANET_EMOJI={Mercury:"⚪",Venus:"🟡",Mars:"🔴",Jupiter:"🟠",Saturn:"🪐",Uranus:"🔵",Neptune:"🔷"};
+/* bright named stars: [name, RA°, Dec°, magnitude] */
+const STARS=[["Sirius",101.29,-16.72,-1.46],["Canopus",95.99,-52.70,-0.74],["Arcturus",213.92,19.18,-0.05],
+  ["Vega",279.23,38.78,0.03],["Capella",79.17,45.998,0.08],["Rigel",78.63,-8.20,0.13],
+  ["Procyon",114.83,5.22,0.34],["Betelgeuse",88.79,7.41,0.42],["Achernar",24.43,-57.24,0.46],
+  ["Hadar",210.96,-60.37,0.61],["Altair",297.70,8.87,0.77],["Acrux",186.65,-63.10,0.77],
+  ["Aldebaran",68.98,16.51,0.85],["Antares",247.35,-26.43,1.09],["Spica",201.30,-11.16,0.98],
+  ["Pollux",116.33,28.03,1.14],["Fomalhaut",344.41,-29.62,1.16],["Deneb",310.36,45.28,1.25],
+  ["Mimosa",191.93,-59.69,1.25],["Regulus",152.09,11.97,1.35],["Castor",113.65,31.89,1.58],
+  ["Gacrux",187.79,-57.11,1.63],["Bellatrix",81.28,6.35,1.64],["Elnath",81.57,28.61,1.65],
+  ["Alnilam",84.05,-1.20,1.69],["Alnitak",85.19,-1.94,1.77],["Alioth",193.51,55.96,1.77],
+  ["Dubhe",165.93,61.75,1.79],["Mintaka",83.00,-0.30,2.23],["Mizar",200.98,54.93,2.23],
+  ["Polaris",37.95,89.26,1.98],["Alkaid",206.89,49.31,1.85],["Saiph",86.94,-9.67,2.07],
+  ["Merak",165.46,56.38,2.37],["Phecda",178.46,53.69,2.44],["Megrez",183.86,57.03,3.31],
+  ["Schedar",10.13,56.54,2.24],["Caph",2.29,59.15,2.28],["GammaCas",14.18,60.72,2.15],
+  ["Ruchbah",21.45,60.24,2.68],["Segin",28.60,63.67,3.35],["Imai",183.79,-58.75,2.79]];
+const STAR_IDX={}; STARS.forEach(s=>STAR_IDX[s[0]]=s);
+/* constellation / asterism polylines by star name */
+const CONSTEL=[
+  {name:"Orion",path:["Betelgeuse","Bellatrix","Mintaka","Alnilam","Alnitak","Saiph","Rigel","Mintaka"]},
+  {name:"Orion",path:["Betelgeuse","Alnitak"]},
+  {name:"Big Dipper",path:["Dubhe","Merak","Phecda","Megrez","Alioth","Mizar","Alkaid"]},
+  {name:"Big Dipper",path:["Megrez","Dubhe"]},
+  {name:"Cassiopeia",path:["Caph","Schedar","GammaCas","Ruchbah","Segin"]},
+  {name:"Southern Cross",path:["Acrux","Gacrux"]},{name:"Southern Cross",path:["Mimosa","Imai"]},
+  {name:"Summer Triangle",path:["Vega","Deneb","Altair","Vega"]},
+  {name:"Gemini",path:["Castor","Pollux"]},
+];
+let DATA=null, COUNTRIES=[], globe=null, selected=null, hovered=null;
+let SATRECS=[], SAT_POS=[];  // satellite.js records + last-propagated positions
+const SAT_COL={stations:"#34d399","gps-ops":"#fbbf24",visual:"#f1f5f9",science:"#a78bfa",
+  weather:"#38bdf8",starlink:"#fb7185"};
+
+const HAZ_COL={fire:"#fb7185",storm:"#38bdf8",volcano:"#fb923c",flood:"#60a5fa",ice:"#a5f3fc",drought:"#fbbf24",quake:"#fbbf24",landslide:"#d6a06a",dust:"#eab308",event:"#f472b6"};
+const HAZ_EM={fire:"🔥",storm:"🌀",volcano:"🌋",flood:"🌊",ice:"🧊",drought:"🏜️",quake:"⚡",landslide:"⛰️",dust:"🌫️",event:"📍"};
+const WMO={0:["Clear","☀️"],1:["Mainly clear","🌤️"],2:["Partly cloudy","⛅"],3:["Overcast","☁️"],
+  45:["Fog","🌫️"],48:["Rime fog","🌫️"],51:["Light drizzle","🌦️"],53:["Drizzle","🌦️"],55:["Heavy drizzle","🌧️"],
+  61:["Light rain","🌦️"],63:["Rain","🌧️"],65:["Heavy rain","🌧️"],66:["Freezing rain","🌧️"],67:["Freezing rain","🌧️"],
+  71:["Light snow","🌨️"],73:["Snow","🌨️"],75:["Heavy snow","❄️"],77:["Snow grains","🌨️"],
+  80:["Rain showers","🌦️"],81:["Rain showers","🌧️"],82:["Violent showers","⛈️"],85:["Snow showers","🌨️"],86:["Snow showers","🌨️"],
+  95:["Thunderstorm","⛈️"],96:["Thunderstorm+hail","⛈️"],99:["Severe thunderstorm","⛈️"]};
+const CITIES=[["Tokyo",35.68,139.69],["Delhi",28.61,77.21],["Shanghai",31.23,121.47],["São Paulo",-23.55,-46.63],
+  ["Mexico City",19.43,-99.13],["Cairo",30.04,31.24],["Mumbai",19.08,72.88],["Beijing",39.90,116.41],
+  ["Dhaka",23.81,90.41],["New York",40.71,-74.01],["Los Angeles",34.05,-118.24],["London",51.51,-0.13],
+  ["Paris",48.86,2.35],["Moscow",55.76,37.62],["Istanbul",41.01,28.98],["Lagos",6.52,3.38],
+  ["Jakarta",-6.21,106.85],["Seoul",37.57,126.98],["Bangkok",13.76,100.50],["Dubai",25.20,55.27],
+  ["Singapore",1.35,103.82],["Sydney",-33.87,151.21],["Johannesburg",-26.20,28.05],["Toronto",43.65,-79.38],
+  ["Chicago",41.88,-87.63],["Berlin",52.52,13.40],["Madrid",40.42,-3.70],["Buenos Aires",-34.60,-58.38],
+  ["Nairobi",-1.29,36.82],["Riyadh",24.71,46.68],["Tehran",35.69,51.39],["Karachi",24.86,67.01],
+  ["Kyiv",50.45,30.52],["Rome",41.90,12.50],["Bogotá",4.71,-74.07],["Lima",-12.05,-77.04]];
+
+/* ---------- trading datasets: commodity supply nodes + maritime chokepoints ---------- */
+// [name, sector, lat, lon] — key global production / export nodes that move commodity prices
+const SUPPLY_NODES=[
+  // energy (oil / gas / LNG)
+  ["Ghawar oil field","energy",25.4,49.6],["Ras Tanura terminal","energy",26.6,50.1],
+  ["Permian Basin","energy",31.9,-102.1],["Cushing (WTI hub)","energy",36.0,-96.8],
+  ["Gulf of Mexico rigs","energy",27.5,-90.0],["Henry Hub (gas)","energy",29.9,-92.0],
+  ["Freeport LNG","energy",28.9,-95.3],["North Sea","energy",58.0,1.5],
+  ["Ras Laffan LNG (Qatar)","energy",25.9,51.6],["Sakhalin","energy",53.0,143.0],
+  ["Bonny (Nigeria)","energy",4.4,7.2],["Groningen gas","energy",53.3,6.8],
+  // metals / mining
+  ["Escondida (Cu, Chile)","metals",-24.3,-69.1],["Chuquicamata (Cu)","metals",-22.3,-68.9],
+  ["Grasberg (Cu/Au)","metals",-4.05,137.1],["Pilbara (iron ore)","metals",-22.5,118.0],
+  ["Norilsk (nickel)","metals",69.3,88.2],["Katanga (Cu/Co, DRC)","metals",-10.7,25.5],
+  ["Bingham Canyon (Cu)","metals",40.5,-112.1],
+  // chips / semiconductors
+  ["Hsinchu (TSMC)","chips",24.8,121.0],["Tainan Fab 18 (TSMC)","chips",23.1,120.3],
+  ["Pyeongtaek (Samsung)","chips",37.0,127.1],["Hwaseong (Samsung)","chips",37.2,126.8],
+  ["Kumamoto (JASM)","chips",32.8,130.7],["Phoenix (TSMC AZ)","chips",33.4,-112.0],
+  // agriculture (grains / softs)
+  ["US Corn Belt","agri",41.5,-93.0],["Kansas wheat","agri",38.5,-98.0],
+  ["Black Sea (Odesa)","agri",46.5,30.7],["Argentine Pampas","agri",-34.0,-61.0],
+  ["Mato Grosso (soy)","agri",-13.0,-56.0],["Minas (coffee, BR)","agri",-21.0,-45.0],
+  ["Ivory Coast cocoa","agri",6.8,-5.3],["Ghana cocoa","agri",6.7,-1.6],
+  ["Vietnam coffee","agri",12.7,108.0],["Punjab wheat","agri",30.9,75.8],
+  ["Australia wheat belt","agri",-32.0,118.0],
+];
+// [name, lat, lon, share-of-trade note]
+const CHOKEPOINTS=[
+  ["Strait of Hormuz",26.6,56.3,"~20% of global oil"],["Suez Canal",30.5,32.3,"~12% of world trade"],
+  ["Panama Canal",9.1,-79.7,"~5% of world trade"],["Strait of Malacca",2.5,101.5,"~25% of traded goods"],
+  ["Bab-el-Mandeb",12.6,43.4,"Red Sea gateway"],["Bosphorus",41.1,29.1,"Black Sea grain/oil"],
+  ["Strait of Gibraltar",36.0,-5.5,"Med↔Atlantic"],["Cape of Good Hope",-34.4,18.5,"Suez detour route"],
+  ["Danish Straits",56.0,11.0,"Baltic↔North Sea"],["Taiwan Strait",24.5,119.5,"chips + shipping"],
+];
+/* ---------- presence: your location + devices on Earth (opt-in, nothing hardcoded) ----------
+   Drop your own always-on beacon(s) by setting, before this module runs:
+     window.WORLDLENS = { observer:{lat,lon,name:"Home"},
+                          presences:[{name:"Home",lat,lon,note:"my base"}] }
+   Empty by default. */
+const WL=(typeof window!=="undefined"&&window.WORLDLENS)||{};
+const PRESENCES=(WL.presences||[]).map(p=>({type:"home",color:"#38bdf8",...p}));
+const SECTOR_COL={energy:"#fb923c",metals:"#a8b3c4",chips:"#38bdf8",agri:"#84cc16"};
+const SECTOR_ICON={energy:"⛽",metals:"⚙️",chips:"💻",agri:"🌾"};
+// animated commodity trade flows: [label, startLat,startLng, endLat,endLng, sector]
+const TRADE_ROUTES=[
+  ["Hormuz oil → China",26.6,56.3,31,122,"energy"],["Hormuz oil → India",26.6,56.3,19,73,"energy"],
+  ["Hormuz oil → Japan",26.6,56.3,35,140,"energy"],["Qatar LNG → Europe",25.9,51.6,52,4,"energy"],
+  ["US Gulf LNG → Europe",29,-93,50,0,"energy"],["Russia oil → China",53,143,40,120,"energy"],
+  ["Black Sea grain → N.Africa",46.5,30.7,31,30,"agri"],["Black Sea grain → Asia",46.5,30.7,20,80,"agri"],
+  ["Brazil soy → China",-24,-46,31,122,"agri"],["US grain → world",29,-93,45,-25,"agri"],
+  ["Chile copper → China",-24,-70,31,122,"metals"],["Australia iron → China",-20,117,31,122,"metals"],
+  ["Taiwan chips → US",24.8,121,37,-95,"chips"],["Taiwan chips → Europe",24.8,121,50,8,"chips"],
+];
+
+function haversineKm(a,b,c,d){const R=6371,r=Math.PI/180;const dLat=(c-a)*r,dLon=(d-b)*r;
+  const x=Math.sin(dLat/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+let NODE_RISK={};  // name -> {risk:bool, why:[...]}
+function computeSupplyRisk(){
+  NODE_RISK={};if(!DATA)return;
+  const haz=DATA.hazards||[], wx=DATA.weather_grid||[];
+  for(const n of SUPPLY_NODES){
+    const [nm,sec,lat,lon]=n; const why=[];
+    for(const h of haz){if(haversineKm(lat,lon,h.lat,h.lon)<650){why.push(`${h.icon||"⚠️"} ${h.kind} nearby`);break;}}
+    // severe weather: nearest grid point with high wind or storm code
+    let bw=null,bd=1e9;for(const w of wx){const d=haversineKm(lat,lon,w.lat,w.lon);if(d<bd){bd=d;bw=w;}}
+    if(bw&&bd<400&&(bw.wind>=45||[95,96,99,82].includes(bw.code)))why.push(`💨 ${Math.round(bw.wind)} km/h wind`);
+    if(why.length)NODE_RISK[nm]={risk:true,why};
+  }
+}
+
+/* ---------- helpers ---------- */
+function magColor(m){return m>=6?"#ef4444":m>=5?"#fb923c":m>=4?"#fbbf24":"#fde68a";}
+function tempColor(t){ // -30 blue -> 45 red
+  const f=Math.max(0,Math.min(1,(t+30)/75));
+  const stops=[[56,100,220],[56,189,248],[52,211,153],[251,191,36],[251,146,60],[239,68,68]];
+  const x=f*(stops.length-1),i=Math.floor(x),g=x-i,a=stops[i],b=stops[Math.min(i+1,stops.length-1)];
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*g)},${Math.round(a[1]+(b[1]-a[1])*g)},${Math.round(a[2]+(b[2]-a[2])*g)})`;
+}
+function windColor(s){return s>=60?"#fb7185":s>=35?"#fbbf24":s>=15?"#34d399":"#7dd3fc";}
+function aqiCat(a){return a<=50?["Good","#34d399"]:a<=100?["Moderate","#fbbf24"]:a<=150?["Unhealthy (sensitive)","#fb923c"]:a<=200?["Unhealthy","#fb7185"]:a<=300?["Very unhealthy","#a855f7"]:["Hazardous","#7f1d1d"];}
+function altColor(a){if(a==null)return"#94a3b8";return a<10000?"#34d399":a<25000?"#38bdf8":a<38000?"#a78bfa":"#f0abfc";}
+function fmtAgo(ms){if(!ms)return"";const s=(Date.now()-ms)/1000;if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";return Math.floor(s/86400)+"d ago";}
+function esc(s){return(s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function cToF(c){return Math.round(c*9/5+32);}
+function precipColor(p){return p>=6?"#1d4ed8":p>=2?"#3b82f6":"#60a5fa";}
+function cloudColor(){return "#e2e8f0";}
+function humColor(h){const f=Math.max(0,Math.min(1,h/100));return `rgb(${Math.round(120-f*90)},${Math.round(200-f*20)},${Math.round(180+f*40)})`;}
+function pressColor(p){ // ~980 low (violet) .. 1040 high (orange)
+  const f=Math.max(0,Math.min(1,(p-985)/55));
+  return `rgb(${Math.round(150+f*100)},${Math.round(100+f*40)},${Math.round(220-f*160)})`;}
+const normLon=x=>((x+540)%360)-180;
+
+/* ---------- satellites (SGP4 via satellite.js, rendered as glowing sprites at true altitude) ---------- */
+let GLOW_TEX=null;
+function glowTexture(){
+  if(GLOW_TEX||typeof THREE==="undefined")return GLOW_TEX;
+  const c=document.createElement("canvas");c.width=c.height=64;
+  const x=c.getContext("2d"),g=x.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,"rgba(255,255,255,1)");g.addColorStop(.2,"rgba(255,255,255,.9)");
+  g.addColorStop(.45,"rgba(255,255,255,.35)");g.addColorStop(1,"rgba(255,255,255,0)");
+  x.fillStyle=g;x.beginPath();x.arc(32,32,32,0,7);x.fill();
+  GLOW_TEX=new THREE.CanvasTexture(c);
+  return GLOW_TEX;
+}
+let SAT_FLARE=null;
+function satFlareTexture(){ // bright core + 4 diffraction spikes (space-telescope look)
+  if(SAT_FLARE||typeof THREE==="undefined")return SAT_FLARE;
+  const c=document.createElement("canvas");c.width=c.height=128;const x=c.getContext("2d"),cx=64,cy=64;
+  const g=x.createRadialGradient(cx,cy,0,cx,cy,60);
+  g.addColorStop(0,"#ffffff");g.addColorStop(.09,"rgba(255,255,255,.95)");
+  g.addColorStop(.3,"rgba(255,255,255,.30)");g.addColorStop(1,"rgba(255,255,255,0)");
+  x.fillStyle=g;x.fillRect(0,0,128,128);
+  x.globalCompositeOperation="lighter";
+  for(const a of [0,Math.PI/2,Math.PI/4,-Math.PI/4]){
+    const wid=a%(Math.PI/2)===0?2.4:1.2, len=a%(Math.PI/2)===0?60:34;
+    x.save();x.translate(cx,cy);x.rotate(a);
+    const lg=x.createLinearGradient(-len,0,len,0);
+    lg.addColorStop(0,"rgba(255,255,255,0)");lg.addColorStop(.5,"rgba(255,255,255,.8)");lg.addColorStop(1,"rgba(255,255,255,0)");
+    x.fillStyle=lg;x.beginPath();x.moveTo(-len,0);x.lineTo(0,-wid);x.lineTo(len,0);x.lineTo(0,wid);x.closePath();x.fill();
+    x.restore();
+  }
+  SAT_FLARE=new THREE.CanvasTexture(c);return SAT_FLARE;
+}
+const SAT_MAT={};
+function satMaterial(group){
+  if(typeof THREE==="undefined")return null;
+  if(!SAT_MAT[group])SAT_MAT[group]=new THREE.SpriteMaterial({map:satFlareTexture(),
+    color:new THREE.Color(SAT_COL[group]||"#94a3b8"),blending:THREE.AdditiveBlending,
+    depthWrite:false,transparent:true,opacity:.95});
+  return SAT_MAT[group];
+}
+const SAT_SIZE={stations:7,visual:3.8,science:4.4,weather:4,"gps-ops":4,starlink:2.8};
+/* shared glowing-sprite factory (used by satellites AND surface markers for one cohesive look) */
+const GLOW_MAT={};
+function glowSprite(color,size){
+  if(typeof THREE==="undefined")return null;
+  if(!GLOW_MAT[color])GLOW_MAT[color]=new THREE.SpriteMaterial({map:glowTexture(),
+    color:new THREE.Color(color),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true,opacity:.85});
+  const s=new THREE.Sprite(GLOW_MAT[color]); s.scale.set(size,size,1); return s;
+}
+/* glowing halos for surface events (earthquakes, hazards) — the clickable pointsData bars sit under them as cores */
+let MARKER_GLOWS=[];
+function buildMarkerGlows(){
+  MARKER_GLOWS=[];
+  if(typeof THREE==="undefined"||!DATA)return;
+  for(const q of DATA.quakes||[]){const sz=Math.max(2.2,(q.mag-1)*1.5);
+    MARKER_GLOWS.push({lat:q.lat,lng:q.lon,alt:.02,layer:"quake",raw:q,mesh:glowSprite(magColor(q.mag),sz)});}
+  for(const h of DATA.hazards||[]){
+    MARKER_GLOWS.push({lat:h.lat,lng:h.lon,alt:.02,layer:"hazard",raw:h,mesh:glowSprite(HAZ_COL[h.kind]||"#fb7185",3.4)});}
+}
+/* --- satellite orbit trail (SGP4 sampled ~1 orbit, split at the dateline) --- */
+let SEL_SAT=null, ORBIT_SEGS=[];
+function computeOrbit(d){
+  ORBIT_SEGS=[]; if(!d||!d.rec||typeof satellite==="undefined")return;
+  const now=Date.now(); let seg=[], prev=null;
+  for(let m=-55;m<=55;m+=1.2){
+    const t=new Date(now+m*60000);
+    try{
+      const pv=satellite.propagate(d.rec,t); if(!pv.position)continue;
+      const g=satellite.eciToGeodetic(pv.position,satellite.gstime(t));
+      const lat=satellite.degreesLat(g.latitude),lng=satellite.degreesLong(g.longitude);
+      if(!isFinite(lat)||!isFinite(lng))continue;
+      if(prev!==null&&Math.abs(lng-prev)>180){if(seg.length>1)ORBIT_SEGS.push(seg);seg=[];}
+      seg.push([lat,lng,Math.max(.01,g.height/6371)]); prev=lng;
+    }catch(e){}
+  }
+  if(seg.length>1)ORBIT_SEGS.push(seg);
+}
+function selectSat(d){SEL_SAT=d;computeOrbit(d);showMarker({type:"sat",raw:d});globe.pathsData(buildPaths());}
+
+/* ---------- day/night terminator (globe.gl MIT day-night-cycle shader + solar-calculator) ---------- */
+const DN_VERT=`varying vec3 vNormal;varying vec2 vUv;
+void main(){vNormal=normalize(normalMatrix*normal);vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
+const DN_FRAG=`#define PI 3.141592653589793
+uniform sampler2D dayTexture;uniform sampler2D nightTexture;uniform vec2 sunPosition;uniform vec2 globeRotation;
+varying vec3 vNormal;varying vec2 vUv;
+float toRad(in float a){return a*PI/180.0;}
+vec3 Polar2Cartesian(in vec2 c){float theta=toRad(90.0-c.x);float phi=toRad(90.0-c.y);
+  return vec3(sin(phi)*cos(theta),cos(phi),sin(phi)*sin(theta));}
+void main(){
+  float invLon=toRad(globeRotation.x);float invLat=-toRad(globeRotation.y);
+  mat3 rotX=mat3(1,0,0,0,cos(invLat),-sin(invLat),0,sin(invLat),cos(invLat));
+  mat3 rotY=mat3(cos(invLon),0,sin(invLon),0,1,0,-sin(invLon),0,cos(invLon));
+  vec3 rotatedSunDirection=rotX*rotY*Polar2Cartesian(sunPosition);
+  float intensity=dot(normalize(vNormal),normalize(rotatedSunDirection));
+  vec4 dayColor=texture2D(dayTexture,vUv);vec4 nightColor=texture2D(nightTexture,vUv);
+  dayColor.rgb*=0.82;  // tame bright deserts/clouds so the day side reads natural, not blown out
+  float blendFactor=smoothstep(-0.12,0.12,intensity);
+  gl_FragColor=mix(nightColor,dayColor,blendFactor);}`;
+function makeDayNight(){
+  if(typeof THREE==="undefined")return null;
+  const L=new THREE.TextureLoader();
+  const day=L.load("https://unpkg.com/three-globe@2.30.0/example/img/earth-blue-marble.jpg");
+  const night=L.load("https://unpkg.com/three-globe@2.30.0/example/img/earth-night.jpg");
+  if("SRGBColorSpace" in THREE){day.colorSpace=THREE.SRGBColorSpace;night.colorSpace=THREE.SRGBColorSpace;}
+  return new THREE.ShaderMaterial({uniforms:{
+    dayTexture:{value:day},nightTexture:{value:night},
+    sunPosition:{value:new THREE.Vector2()},globeRotation:{value:new THREE.Vector2()}},
+    vertexShader:DN_VERT,fragmentShader:DN_FRAG});
+}
+function sunPosAt(dt){ // -> [subsolar lng, subsolar lat] via solar-calculator
+  const day=new Date(+dt).setUTCHours(0,0,0,0);
+  const t=solar.century(dt);
+  const lng=(day-dt)/864e5*360-180;
+  return [lng-solar.equationOfTime(t)/4, solar.declination(t)];
+}
+function updateSun(){
+  if(!solar)return;
+  const p=sunPosAt(new Date());  // [subsolar lng, lat]
+  if(DN_MAT)DN_MAT.uniforms.sunPosition.value.set(p[0],p[1]);
+  if(SUN_LIGHT&&globe&&globe.getCoords){
+    const c=globe.getCoords(p[1],p[0],6);  // point the light from the sun's direction
+    SUN_LIGHT.position.set(c.x,c.y,c.z);
+  }
+}
+/* ---------- rotating cloud veil (globe.gl MIT clouds example) ---------- */
+let CLOUDS=null;
+const CLOUDS_URL="https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/clouds/clouds.png";
+function addClouds(){
+  if(typeof THREE==="undefined"||!globe||CLOUDS)return;
+  new THREE.TextureLoader().load(CLOUDS_URL,tex=>{
+    const r=globe.getGlobeRadius();
+    CLOUDS=new THREE.Mesh(
+      new THREE.SphereGeometry(r*1.012,72,72),
+      new THREE.MeshPhongMaterial({map:tex,transparent:true,opacity:.55,depthWrite:false}));
+    CLOUDS.visible=on.cloudveil;
+    globe.scene().add(CLOUDS);
+    (function spin(){if(CLOUDS)CLOUDS.rotation.y+=0.00016;requestAnimationFrame(spin);})();
+  });
+}
+let SAT_OBJS=[];  // {rec, group, name, mesh, lat, lng, alt(fraction of R), km}
+function buildSatObjs(){
+  SAT_OBJS=[];
+  if(typeof satellite==="undefined"||typeof THREE==="undefined"||!DATA)return;
+  for(const s of DATA.satellites||[]){
+    try{
+      const rec=satellite.twoline2satrec(s.l1,s.l2);
+      if(!rec||rec.error)continue;
+      const spr=new THREE.Sprite(satMaterial(s.group));
+      const sz=SAT_SIZE[s.group]||2.6; spr.scale.set(sz,sz,1);
+      SAT_OBJS.push({rec,group:s.group,name:s.name,mesh:spr,sz,phase:SAT_OBJS.length*0.7,lat:0,lng:0,alt:0.05,km:0});
+    }catch(e){}
+  }
+}
+function propagateSats(){
+  if(typeof satellite==="undefined"||!SAT_OBJS.length)return;
+  const now=new Date(), gmst=satellite.gstime(now);
+  for(const s of SAT_OBJS){
+    try{
+      const pv=satellite.propagate(s.rec,now);
+      if(!pv.position)continue;
+      const g=satellite.eciToGeodetic(pv.position,gmst);
+      const lat=satellite.degreesLat(g.latitude), lon=satellite.degreesLong(g.longitude);
+      if(!isFinite(lat)||!isFinite(lon))continue;
+      s.lat=lat; s.lng=lon; s.km=Math.round(g.height);
+      s.alt=Math.max(0.01,g.height/6371);  // TRUE altitude (Earth radius = 6371 km) — real orbits
+    }catch(e){}
+  }
+}
+let _twinkle=false;
+function startTwinkle(){
+  if(_twinkle)return;_twinkle=true;let f=0;
+  (function loop(){
+    f+=0.045;
+    if(!LITE&&on.sats)for(let i=0;i<SAT_OBJS.length;i++){const s=SAT_OBJS[i];
+      if(s.mesh)s.mesh.scale.setScalar(s.sz*(0.9+0.12*Math.sin(f+s.phase)));}
+    for(const c of CELEST){if(c.mesh&&c.kind!=="sun")c.mesh.rotation.y+=0.004;}
+    requestAnimationFrame(loop);
+  })();
+}
+function updateObjects(){
+  if(!globe)return;
+  updateCelestialPos();
+  const objs=[];
+  if(on.sats){
+    if(LITE){const step=Math.max(1,Math.floor(SAT_OBJS.length/LITE_SAT_CAP));for(let i=0;i<SAT_OBJS.length;i+=step)objs.push(SAT_OBJS[i]);}
+    else for(const s of SAT_OBJS)objs.push(s);
+  }
+  for(const m of MARKER_GLOWS)if((m.layer==="quake"&&on.quake)||(m.layer==="hazard"&&on.hazard))objs.push(m);
+  for(const c of CELEST){
+    if(c.lat==null)continue;
+    if((c.kind!=="planet"&&on.sunmoon)||(c.kind==="planet"&&on.planets))objs.push(c);
+  }
+  globe.objectsData(objs);
+}
+/* sub-solar / sub-lunar points (real time) using current GMST */
+function subPoint(body){
+  if(typeof satellite==="undefined"||!body)return null;
+  const gmst=satellite.gstime(new Date())*180/Math.PI;
+  return {lat:body.dec,lng:normLon(body.ra-gmst)};
+}
+/* map a celestial RA/Dec onto the sky shell around the globe */
+function raDecShell(ra,dec,alt){return {lat:dec,lng:normLon(ra+180),alt:alt};}
+function skyPos(body,alt){return raDecShell(body.ra,body.dec,alt);}
+const SHELL_ALT=1.8;
+
+/* point in polygon */
+function inRing(lng,lat,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];if(((yi>lat)!==(yj>lat))&&(lng<(xj-xi)*(lat-yi)/(yj-yi)+xi))inside=!inside;}return inside;}
+function inCountry(lng,lat,geom){const polys=geom.type==="Polygon"?[geom.coordinates]:geom.coordinates;for(const poly of polys){if(inRing(lng,lat,poly[0]))return true;}return false;}
+function bboxCenter(geom){let minX=180,minY=90,maxX=-180,maxY=-90;const polys=geom.type==="Polygon"?[geom.coordinates]:geom.coordinates;for(const poly of polys)for(const[x,y]of poly[0]){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}return{lat:(minY+maxY)/2,lng:(minX+maxX)/2,span:Math.max(maxX-minX,maxY-minY)};}
+function nearest(grid,lat,lng){let best=null,bd=1e9;for(const g of grid){const d=(g.lat-lat)**2+(g.lon-lng)**2;if(d<bd){bd=d;best=g;}}return best;}
+
+/* ---------- events / choropleth ---------- */
+function choroEvents(){const e=[];if(!DATA)return e;for(const q of DATA.quakes||[])e.push({t:"quake",lng:q.lon,lat:q.lat,raw:q});for(const h of DATA.hazards||[])e.push({t:"hazard",lng:h.lon,lat:h.lat,kind:h.kind,raw:h});for(const n of DATA.news_hotspots||[])e.push({t:"news",lng:n.lon,lat:n.lat,raw:n});return e;}
+function computeCountryCounts(){const ev=choroEvents();for(const c of COUNTRIES){let n=0;for(const e of ev){if(inCountry(e.lng,e.lat,c.geometry)){n++;if(n>200)break;}}c.__count=n;}}
+function maxCount(){return Math.max(1,...COUNTRIES.map(c=>c.__count||0));}
+
+/* ---------- globe data builders ---------- */
+function buildPoints(){
+  if(!DATA)return[];const pts=[];
+  if(on.quake)for(const q of DATA.quakes||[])pts.push({lat:q.lat,lng:q.lon,type:"quake",color:"#fff7e0",r:Math.max(.1,(q.mag-2)*.08),alt:.02,raw:q,label:`⚡ M${q.mag} — ${esc(q.place)}`});
+  if(on.hazard)for(const h of DATA.hazards||[])pts.push({lat:h.lat,lng:h.lon,type:"hazard",color:"#fff",r:.11,alt:.02,raw:h,label:`${h.icon} ${esc(h.title)}`});
+  if(on.gdacs)for(const d of DATA.gdacs||[]){const col=d.sev>=3?"#ef4444":d.sev>=2?"#fb923c":"#34d399";
+    pts.push({lat:d.lat,lng:d.lon,type:"gdacs",color:col,r:.13+d.sev*.13,alt:.025,raw:d,label:`${d.icon} ${d.alert} · ${esc(d.name)}`});}
+  if(on.temp)for(const w of DATA.weather_grid||[])pts.push({lat:w.lat,lng:w.lon,type:"temp",color:tempColor(w.temp),r:.9,alt:.002,raw:w,label:`🌡️ ${w.temp}°C / ${cToF(w.temp)}°F`});
+  if(on.precip)for(const w of DATA.weather_grid||[]){if(!(w.precip>0))continue;pts.push({lat:w.lat,lng:w.lon,type:"precip",color:precipColor(w.precip),r:Math.min(1.1,.4+w.precip*.12),alt:.003,raw:w,label:`🌧️ ${w.precip} mm`});}
+  if(on.clouds)for(const w of DATA.weather_grid||[]){if(!(w.cloud>=35))continue;pts.push({lat:w.lat,lng:w.lon,type:"clouds",color:`rgba(226,232,240,${(.12+w.cloud/100*.5).toFixed(2)})`,r:.6+w.cloud/100*.6,alt:.006,raw:w,label:`☁️ ${w.cloud}% cloud`});}
+  if(on.humidity)for(const w of DATA.weather_grid||[])pts.push({lat:w.lat,lng:w.lon,type:"humidity",color:humColor(w.humidity),r:.85,alt:.002,raw:w,label:`💧 ${w.humidity}% RH`});
+  if(on.pressure)for(const w of DATA.weather_grid||[])pts.push({lat:w.lat,lng:w.lon,type:"pressure",color:pressColor(w.pressure),r:.85,alt:.002,raw:w,label:`🔵 ${w.pressure} hPa`});
+  if(on.air)for(const a of DATA.air_grid||[])pts.push({lat:a.lat,lng:a.lon,type:"air",color:aqiCat(a.aqi)[1],r:.85,alt:.004,raw:a,label:`🫁 AQI ${a.aqi} — ${aqiCat(a.aqi)[0]}`});
+  if(on.flights)for(const f of DATA.flights||[]){if(f.mil)continue;pts.push({lat:f.lat,lng:f.lon,type:"flight",color:altColor(f.alt),r:.12,alt:.02,raw:f,label:`✈️ ${esc(f.flight||"—")} ${f.type?"("+f.type+")":""}<br><span style="color:#8fa0bd">${f.alt!=null?f.alt.toLocaleString()+" ft":"ground"}</span>`});}
+  if(on.mil)for(const f of DATA.flights||[]){if(!f.mil)continue;pts.push({lat:f.lat,lng:f.lon,type:"mil",color:"#f87171",r:.3,alt:.05,raw:f,label:`🛩️ ${esc(f.flight||"military")} ${f.type?"("+f.type+")":""}`});}
+  if(on.news)for(const n of DATA.news_hotspots||[])pts.push({lat:n.lat,lng:n.lon,type:"news",color:"#60a5fa",r:Math.min(.5,.14+Math.log10((n.count||1)+1)*.14),alt:.028,raw:n,label:`📰 ${esc(n.name)} (${n.count})`});
+  if(on.iss&&DATA.iss)pts.push({lat:DATA.iss.lat,lng:DATA.iss.lon,type:"iss",color:"#a78bfa",r:.34,alt:.035,raw:DATA.iss,label:"🛰️ ISS — live position"});
+  if(on.ziggy)for(const pz of PRESENCES)pts.push({lat:pz.lat,lng:pz.lon,type:"presence",color:pz.color||"#38bdf8",r:.55,alt:.04,raw:pz,label:`⚡ ${esc(pz.name)} — ${esc(pz.note||"")}`});
+  // commodity supply nodes (per-sector) — at-risk nodes glow red; chokepoints
+  for(const n of SUPPLY_NODES){const [nm,sec,lat,lon]=n;if(!on["nodes_"+sec])continue;
+    const risk=NODE_RISK[nm];pts.push({lat,lng:lon,type:"node",color:risk?"#ef4444":SECTOR_COL[sec],r:risk?.42:.24,alt:.03,
+      raw:{name:nm,sec,lat,lon,risk},label:`${SECTOR_ICON[sec]} ${esc(nm)}${risk?" — ⚠️ AT RISK":""}`});}
+  if(on.chokepoints)for(const c of CHOKEPOINTS){const [nm,lat,lon,note]=c;
+    pts.push({lat,lng:lon,type:"choke",color:"#f472b6",r:.34,alt:.02,raw:{name:nm,note,lat,lon},
+      label:`🚢 ${esc(nm)}<br><span style="color:#8fa0bd">${esc(note)}</span>`});}
+  return pts;
+}
+function buildRings(){ // pulsing rings — strong quakes (amber) + GDACS severity alerts (orange/red)
+  const r=[];
+  if(DATA&&on.quake)for(const q of (DATA.quakes||[]).filter(q=>q.mag>=5).slice(0,10))r.push({lat:q.lat,lng:q.lon,rgb:"251,191,36",max:5,period:900});
+  if(DATA&&on.gdacs)for(const d of (DATA.gdacs||[]).filter(x=>x.sev>=2).slice(0,16))r.push({lat:d.lat,lng:d.lon,rgb:d.sev>=3?"239,68,68":"251,146,60",max:7,period:d.sev>=3?600:800});
+  if(on.ziggy)for(const pz of PRESENCES)r.push({lat:pz.lat,lng:pz.lon,rgb:"56,189,248",max:4,period:1500});  // presence beacon pulse
+  return r;
+}
+function buildArcs(){ // animated commodity trade-flow arcs
+  if(!on.traderoutes)return[];
+  return TRADE_ROUTES.map(r=>({label:r[0],sLat:r[1],sLng:r[2],eLat:r[3],eLng:r[4],color:SECTOR_COL[r[5]]||"#22d3ee"}));
+}
+function buildPaths(){ // wind streamlines (animated) + constellation lines (solid, on sky shell)
+  const out=[];
+  if(DATA&&on.wind)for(const w of DATA.weather_grid||[]){
+    const move=((w.dir||0)+180)*Math.PI/180; // meteorological dir = FROM; streamline goes TO
+    const step=Math.min(6,1.4+w.wind*0.05);
+    const pts=[[w.lat,w.lon,.008]];let la=w.lat,lo=w.lon;
+    for(let k=0;k<4;k++){
+      la+=step*Math.cos(move);
+      lo+=step*Math.sin(move)/Math.max(.25,Math.cos(la*Math.PI/180));
+      pts.push([la,lo,.008]);
+    }
+    out.push({pts,color:windColor(w.wind),kind:"wind"});
+  }
+  if(on.constel)for(const c of CONSTEL){
+    const pts=[];
+    for(const nm of c.path){const s=STAR_IDX[nm];if(!s)continue;const sp=raDecShell(s[1],s[2],SHELL_ALT+.15);pts.push([sp.lat,sp.lng,sp.alt]);}
+    if(pts.length>=2)out.push({pts,color:"rgba(129,140,248,.5)",kind:"constel"});
+  }
+  if(SEL_SAT)for(const seg of ORBIT_SEGS)out.push({pts:seg,color:"#67e8f9",kind:"orbit"});
+  return out;
+}
+function buildLabels(){
+  const L=[];
+  if(on.cities)for(const c of CITIES)L.push({lat:c[1],lng:c[2],text:c[0],ltype:"city",size:.7,dot:.18,color:"rgba(230,237,247,.7)",alt:.01});
+  if(on.ziggy)for(const pz of PRESENCES)L.push({lat:pz.lat,lng:pz.lon,text:pz.name,ltype:"presence",raw:pz,size:1.7,dot:.35,color:pz.color||"#38bdf8",alt:.05});
+  if(on.constel){
+    for(const s of STARS){const sp=raDecShell(s[1],s[2],SHELL_ALT+.15);
+      L.push({lat:sp.lat,lng:sp.lng,alt:sp.alt,text:s[3]<1.6?s[0]:"",ltype:"star",raw:s,
+        size:.9,dot:Math.max(.12,(2.6-s[3])*.22),color:"rgba(226,232,255,.92)"});}
+  }
+  // Sun / Moon / planets are rendered as lit 3D bodies (CELEST) — no floating name labels;
+  // hover any body for its name + zodiac position.
+  return L;
+}
+/* ---------- Sun / Moon / planets as glowing bodies in the sky (their real directions) ---------- */
+let CELEST=[];
+const TEX_BASE="https://raw.githubusercontent.com/jeromeetienne/threex.planets/master/images/";
+const PLANET_TEX={Mercury:"mercurymap.jpg",Venus:"venusmap.jpg",Mars:"marsmap1k.jpg",
+  Jupiter:"jupitermap.jpg",Saturn:"saturnmap.jpg",Uranus:"uranusmap.jpg",Neptune:"neptunemap.jpg"};
+const BODY_SIZE={Sun:11,Moon:4.6,Mercury:2.6,Venus:3.6,Mars:3.1,Jupiter:6.6,Saturn:5.6,Uranus:4,Neptune:4};
+const _texCache={};
+function tex(file){
+  if(!_texCache[file]){_texCache[file]=new THREE.TextureLoader().load(TEX_BASE+file);
+    if("SRGBColorSpace" in THREE)_texCache[file].colorSpace=THREE.SRGBColorSpace;}
+  return _texCache[file];
+}
+function bodyMesh(kind,name){
+  const sz=BODY_SIZE[name]||3;
+  if(kind==="sun"){ // bright emissive orb + soft corona (bloom does the rest)
+    const g=new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(sz,32,32),new THREE.MeshBasicMaterial({color:0xfff0bf})));
+    const corona=glowSprite("#ffdf9a",sz*4.4); g.add(corona);
+    return g;
+  }
+  if(kind==="moon")  // Standard material -> lit by the sun light => real lunar phase
+    return new THREE.Mesh(new THREE.SphereGeometry(sz,48,48),
+      new THREE.MeshStandardMaterial({map:tex("moonmap1k.jpg"),roughness:1,metalness:0}));
+  const sphere=new THREE.Mesh(new THREE.SphereGeometry(sz,48,48),
+    new THREE.MeshStandardMaterial({map:tex(PLANET_TEX[name]||"marsmap1k.jpg"),roughness:1,metalness:0}));
+  sphere.rotation.z=0.15;  // slight axial tilt for realism
+  if(name==="Saturn"){
+    const ring=new THREE.Mesh(new THREE.RingGeometry(sz*1.4,sz*2.3,80),
+      new THREE.MeshBasicMaterial({color:0xdccca6,side:THREE.DoubleSide,transparent:true,opacity:.5}));
+    ring.rotation.x=Math.PI*0.42;
+    const g=new THREE.Group(); g.add(sphere); g.add(ring); return g;
+  }
+  return sphere;
+}
+function buildCelestial(){
+  CELEST=[];
+  if(typeof THREE==="undefined"||!DATA||!DATA.sky)return;
+  const sk=DATA.sky;
+  CELEST.push({kind:"sun",name:"Sun",body:sk.sun,alt:2.5,mesh:bodyMesh("sun","Sun"),
+    label:`☀️ Sun — ${sk.sun.sign} ${sk.sun.deg}°`});
+  CELEST.push({kind:"moon",name:"Moon",body:sk.moon,alt:1.85,mesh:bodyMesh("moon","Moon"),
+    label:`Moon — ${sk.moon.phase} ${sk.moon.illum}%`});
+  for(const p of sk.planets||[]){if(p.name==="Sun"||p.name==="Moon")continue;
+    CELEST.push({kind:"planet",name:p.name,body:p,alt:2.1,mesh:bodyMesh("planet",p.name),
+      label:`${p.name} — ${p.sign} ${p.deg}°${p.retro?" ℞":""}`});}
+  updateCelestialPos();
+}
+function updateCelestialPos(){
+  for(const c of CELEST){const sp=subPoint(c.body);if(sp){c.lat=sp.lat;c.lng=sp.lng;}}
+}
+
+function heatColor(c){
+  // no choropleth fill — keep the photoreal Earth clean; only a faint tint for hover/selection
+  if(c===selected)return"rgba(56,189,248,.22)";
+  if(c===hovered)return"rgba(255,255,255,.10)";
+  return"rgba(0,0,0,0)";
+}
+function refresh(){
+  if(!globe)return;
+  globe.pointsData(buildPoints()).pathsData(buildPaths()).labelsData(buildLabels())
+    .ringsData(buildRings()).arcsData(buildArcs());
+  globe.polygonCapColor(heatColor).polygonAltitude(c=>c===selected?.012:.006);
+  updateObjects();
+  updateLayerCounts();
+}
+
+/* ---------- panels ---------- */
+const P={el:document.getElementById("panel"),em:document.getElementById("pEm"),t:document.getElementById("pT"),s:document.getElementById("pS"),b:document.getElementById("pB")};
+function openPanel(){P.el.classList.add("open");}
+function closePanel(){P.el.classList.remove("open");if(SEL_SAT){SEL_SAT=null;ORBIT_SEGS=[];if(globe)globe.pathsData(buildPaths());}if(selected){selected=null;refresh();resetView();}}
+function kv(k,v){return `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;}
+function card(k,v,s){return `<div class="mc"><div class="k">${k}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:""}</div>`;}
+
+function showMarker(p){
+  const r=p.raw;
+  if(p.type==="quake"){P.em.textContent="⚡";P.t.textContent="M"+r.mag+" earthquake";P.s.textContent="USGS · seismic";
+    P.b.innerHTML=kv("Location",esc(r.place))+kv("Magnitude","M"+r.mag)+kv("Depth",(r.depth??"?")+" km")+kv("When",fmtAgo(r.time))+kv("Coordinates",r.lat+", "+r.lon)+(r.url?`<a class="btn" href="${r.url}" target="_blank" rel="noopener">Open USGS event ↗</a>`:"");
+  }else if(p.type==="gdacs"){P.em.textContent=r.icon||"🚨";P.t.textContent=esc(r.name);P.s.textContent=r.kind+" · GDACS "+r.alert+" alert";
+    const ac={Red:"#ef4444",Orange:"#fb923c",Green:"#34d399"}[r.alert]||"#fbbf24";
+    P.b.innerHTML=kv("Alert level",`<span style="color:${ac}">${r.alert}</span>`)+kv("Type",r.kind)+kv("Coordinates",r.lat+", "+r.lon)+`<p style="color:var(--muted);font-size:12px;margin-top:12px">GDACS scores disasters by expected humanitarian impact (Green→Orange→Red). Red/Orange events pulse on the globe.</p>`;openPanel();return;
+  }else if(p.type==="hazard"){P.em.textContent=HAZ_EM[r.kind]||"📍";P.t.textContent=esc(r.title);P.s.textContent=r.kind+" · NASA EONET";
+    P.b.innerHTML=kv("Type",r.kind)+kv("Coordinates",r.lat+", "+r.lon)+(r.date?kv("Reported",new Date(r.date).toLocaleDateString()):"")+(r.url?`<a class="btn" href="${r.url}" target="_blank" rel="noopener">Source ↗</a>`:"");
+  }else if(p.type==="flight"||p.type==="mil"){P.em.textContent=p.type==="mil"?"🛩️":"✈️";P.t.textContent=esc(r.flight||"Unknown flight");P.s.textContent=(p.type==="mil"?"military · ":"")+"adsb.lol · live";
+    P.b.innerHTML=kv("Callsign",esc(r.flight||"—"))+kv("Aircraft",r.type||"—")+kv("Altitude",r.alt!=null?r.alt.toLocaleString()+" ft":"on ground")+kv("Ground speed",r.speed!=null?Math.round(r.speed)+" kt":"—")+kv("Heading",r.track!=null?Math.round(r.track)+"°":"—")+kv("Position",r.lat+", "+r.lon);
+  }else if(p.type==="temp"){P.em.textContent="🌡️";P.t.textContent=r.temp+"°C / "+cToF(r.temp)+"°F";const wm=WMO[r.code]||["—","🌡️"];P.s.textContent="Open-Meteo · weather";
+    P.b.innerHTML=kv("Conditions",wm[1]+" "+wm[0])+kv("Wind",r.wind+" km/h")+kv("Wind dir",Math.round(r.dir)+"°")+kv("Coordinates",r.lat+", "+r.lon);
+  }else if(p.type==="air"){const cat=aqiCat(r.aqi);P.em.textContent="🫁";P.t.textContent="AQI "+r.aqi;P.s.textContent="Open-Meteo · air quality";
+    P.b.innerHTML=kv("Category",`<span style="color:${cat[1]}">${cat[0]}</span>`)+kv("PM2.5",r.pm25+" µg/m³")+kv("Coordinates",r.lat+", "+r.lon);
+  }else if(p.type==="news"){P.em.textContent="📰";P.t.textContent=esc(r.name);P.s.textContent="GDELT · news cluster";P.b.innerHTML=kv("Reports",r.count)+kv("Coordinates",r.lat+", "+r.lon);
+  }else if(p.type==="node"){P.em.textContent=SECTOR_ICON[r.sec]||"📍";P.t.textContent=esc(r.name);P.s.textContent=r.sec+" · supply node";
+    const rk=NODE_RISK[r.name];let h=kv("Sector",r.sec)+kv("Location",r.lat.toFixed(1)+", "+r.lon.toFixed(1))+kv("Status",rk?`<span style="color:#ef4444">⚠️ At risk</span>`:`<span style="color:#34d399">Clear</span>`);
+    if(rk)h+=`<div class="mini">Why it's flagged</div>`+rk.why.map(w=>`<div class="kv"><span class="k">${esc(w)}</span></div>`).join("");
+    const cm=(DATA.commodities||[]).filter(c=>c.group===r.sec);
+    if(cm.length){h+=`<div class="mini">${r.sec} prices</div>`+cm.map(c=>`<div class="kv"><span class="k">${c.name}</span><span class="v ${c.chg_pct>=0?'up':'down'}">${c.price} · ${c.chg_pct>=0?'+':''}${c.chg_pct}%</span></div>`).join("");}
+    P.b.innerHTML=h;openPanel();return;
+  }else if(p.type==="presence"){P.em.textContent="⚡";P.t.textContent=esc(r.name);P.s.textContent=(r.type||"presence")+" · on Earth";
+    P.b.innerHTML=kv("Location",esc(r.note||""))+kv("Coordinates",r.lat+", "+r.lon)+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A presence beacon. Add your own devices &amp; people via <code>window.WORLDLENS</code> — an always-on map of everything, everywhere.</p>`;openPanel();return;
+  }else if(p.type==="choke"){P.em.textContent="🚢";P.t.textContent=esc(r.name);P.s.textContent="maritime chokepoint";
+    P.b.innerHTML=kv("Significance",esc(r.note))+kv("Location",r.lat.toFixed(1)+", "+r.lon.toFixed(1))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A disruption here (weather, conflict, blockage) ripples through global freight and commodity prices.</p>`;openPanel();return;
+  }else if(p.type==="sat"){P.em.textContent="🛰️";P.t.textContent=esc(r.name);P.s.textContent=r.group+" · Celestrak · live orbit";
+    const per=r.rec&&r.rec.no?(2*Math.PI/r.rec.no):null;
+    let h=kv("Group",r.group)+kv("Altitude",r.km.toLocaleString()+" km")+kv("Sub-point",r.lat.toFixed(2)+", "+r.lng.toFixed(2))+(per?kv("Orbital period",Math.round(per)+" min"):"");
+    const pass=nextPass(r.rec);
+    if(pass&&OBSERVER)h+=`<div class="mini">Next pass over ${esc(OBSERVER.name||"you")}</div>`+kv("When",pass.when)+kv("Max elevation",Math.round(pass.el)+"°");
+    h+=`<p style="color:var(--muted);font-size:12px;margin-top:12px">Cyan trail = live orbit (SGP4, ±55 min). Tracking on.</p>`;
+    P.b.innerHTML=h;
+  }else{P.em.textContent="🛰️";P.t.textContent="ISS";P.s.textContent="live orbital position";P.b.innerHTML=kv("Latitude",r.lat)+kv("Longitude",r.lon)+`<p style="color:var(--muted);font-size:12px;margin-top:12px">Orbits ~28,000 km/h, circling Earth every ~90 min.</p>`;}
+  openPanel();
+}
+function showPlanet(p){
+  P.em.textContent=p.glyph;P.t.textContent=p.name;P.s.textContent="geocentric · of date";
+  let h=`<div class="cards">`+card("Zodiac",p.sign_glyph+" "+p.sign,p.deg+"°")+card("Motion",p.retro?"℞ Retrograde":"Direct","");
+  if(p.dist_au)h+=card("Distance",p.dist_au+" AU","");
+  h+=card("Ecliptic λ",p.lon+"°","")+`</div>`;
+  h+=kv("Right ascension",p.ra+"°")+kv("Declination",p.dec+"°");
+  P.b.innerHTML=h;openPanel();
+}
+function showSky(){
+  if(!DATA||!DATA.sky){P.em.textContent="✨";P.t.textContent="Sky";P.s.textContent="";P.b.innerHTML=`<p class="muted">Sky data loading…</p>`;openPanel();return;}
+  const sk=DATA.sky, m=sk.moon;
+  P.em.textContent="✨";P.t.textContent="Sky & astrology";P.s.textContent="live geocentric positions";
+  let h=`<div class="cards">`;
+  h+=card("Sun",sk.sun.sign_glyph+" "+sk.sun.sign,sk.sun.deg+"°");
+  h+=card("Moon",m.phase_emoji+" "+m.sign,m.phase+" · "+m.illum+"%");
+  h+=`</div>`;
+  h+=`<div class="mini">Planets in the zodiac</div>`;
+  for(const p of sk.planets){if(p.name==="Sun"||p.name==="Moon")continue;
+    h+=`<div class="cityrow" onclick='__planet("${p.name}")'><span>${p.glyph} ${p.name}</span><span>${p.sign_glyph} ${p.sign} ${p.deg}°${p.retro?' <span style="color:#fb7185">℞</span>':''}</span></div>`;}
+  h+=`<p style="color:var(--muted);font-size:11.5px;margin-top:14px">Computed on-device (JPL Keplerian + Meeus lunar) — no API. Tropical zodiac, of date. Toggle the <b>Planets</b> layer to see them floating in the sky.</p>`;
+  P.b.innerHTML=h;openPanel();
+}
+window.__planet=(name)=>{const p=(DATA.sky.planets||[]).find(x=>x.name===name);if(p)showPlanet(p);};
+
+function showCountry(c){
+  const ev=choroEvents().filter(e=>inCountry(e.lng,e.lat,c.geometry));
+  const q=ev.filter(e=>e.t==="quake").sort((a,b)=>b.raw.mag-a.raw.mag);
+  const hz=ev.filter(e=>e.t==="hazard"); const nw=ev.filter(e=>e.t==="news");
+  const pr=c.properties, ctr=bboxCenter(c.geometry);
+  const wx=nearest(DATA.weather_grid||[],ctr.lat,ctr.lng);
+  const aq=nearest(DATA.air_grid||[],ctr.lat,ctr.lng);
+  const flt=(DATA.flights||[]).filter(f=>inCountry(f.lon,f.lat,c.geometry));
+  P.em.textContent="📍";P.t.textContent=esc(pr.ADMIN||pr.NAME);P.s.textContent=(pr.CONTINENT||"")+" · "+(pr.SUBREGION||"");
+  let html="";
+  // correlative condition cards
+  html+=`<div class="cards">`;
+  if(wx){const wm=WMO[wx.code]||["—",""];html+=card("Weather",wx.temp+"°C",wm[1]+" "+wm[0]);html+=card("Wind",Math.round(wx.wind)+" km/h",Math.round(wx.dir)+"°");}
+  if(aq){const cat=aqiCat(aq.aqi);html+=card("Air quality",aq.aqi,cat[0]);}
+  html+=card("Flights overhead",flt.length,flt.filter(f=>f.mil).length?flt.filter(f=>f.mil).length+" military":"");
+  html+=`</div>`;
+  html+=kv("Live events",ev.length)+kv("Earthquakes",q.length)+kv("Hazards",hz.length)+kv("News clusters",nw.length);
+  if(pr.POP_EST)html+=kv("Population",Number(pr.POP_EST).toLocaleString());
+  if(q.length){html+=`<div class="mini">Strongest quakes</div>`;for(const e of q.slice(0,5))html+=`<div class="ev" onclick='window.__fly(${e.lat},${e.lng})'><div class="ic">⚡</div><div><div class="tx">M${e.raw.mag} — ${esc(e.raw.place)}</div><div class="mt">${fmtAgo(e.raw.time)}</div></div></div>`;}
+  if(hz.length){html+=`<div class="mini">Active hazards</div>`;for(const e of hz.slice(0,5))html+=`<div class="ev" onclick='window.__fly(${e.lat},${e.lng})'><div class="ic">${HAZ_EM[e.kind]||"📍"}</div><div><div class="tx">${esc(e.raw.title)}</div><div class="mt">${e.kind}</div></div></div>`;}
+  if(!ev.length&&!flt.length)html+=`<p style="color:var(--muted);font-size:12.5px;margin-top:14px">Quiet right now — no live events or tracked flights inside its borders.</p>`;
+  P.b.innerHTML=html;openPanel();
+}
+function showGlobal(){
+  if(!DATA)return;const g=DATA.globals||{},c=DATA.counts||{},st=DATA.stress||{};
+  P.em.textContent="🌐";P.t.textContent="Global snapshot";P.s.textContent="everything, correlated";
+  let html=`<div class="cards">`;
+  html+=card("Stress index",st.score??"—",st.band||"");
+  html+=card("Avg temp",g.avg_temp_c!=null?g.avg_temp_c+"°C":"—",g.min_temp_c!=null?`${g.min_temp_c}° to ${g.max_temp_c}°`:"");
+  html+=card("Max wind",g.max_wind_kmh!=null?Math.round(g.max_wind_kmh)+" km/h":"—","");
+  html+=card("Avg AQI",g.avg_aqi??"—",g.max_aqi!=null?"peak "+g.max_aqi:"");
+  html+=card("Flights",g.flights_tracked??"—",g.military_aircraft?g.military_aircraft+" military":"");
+  html+=card("Quakes 24h",c.quakes_24h??"—",(c.quakes_sig??0)+" ≥M4.5");
+  html+=`</div>`;
+  html+=`<div class="mini">Stress components</div>`;
+  const comp=st.components||{},W=st.weights||{},BC={seismic:"#fbbf24",hazards:"#fb7185",space:"#a78bfa",market:"#38bdf8"};
+  for(const k in comp)html+=`<div class="kv"><span class="k" style="text-transform:capitalize">${k} <span style="opacity:.6">${Math.round((W[k]||0)*100)}%</span></span><span class="v" style="color:${BC[k]}">${comp[k]}</span></div>`;
+  html+=kv("Active hazards",c.hazards??"—")+kv("Weather grid",c.weather_pts??"—")+kv("Air grid",c.air_pts??"—");
+  html+=`<p style="color:var(--muted);font-size:11.5px;margin-top:14px">All feeds are keyless & read-only. Click any country to see these signals localized.</p>`;
+  P.b.innerHTML=html;openPanel();
+}
+window.__fly=(lat,lng)=>smoothFly(lat,lng,.7,900);
+
+/* ---------- command header KPIs + status bar ---------- */
+function renderKPIs(){
+  if(!DATA)return;const c=DATA.counts||{},st=DATA.stress||{},g=DATA.globals||{};
+  const cls={Calm:"b-calm",Elevated:"b-elev",Tense:"b-tense",Critical:"b-crit"}[st.band]||"";
+  document.getElementById("kpis").innerHTML=
+    `<div class="kpi"><div class="kl">Stress</div><div class="kv ${cls}">${st.score??"—"} <small>${st.band||""}</small></div></div>
+     <div class="kpi"><div class="kl">Quakes 24h</div><div class="kv">${c.quakes_24h??"—"} <small>${c.quakes_sig??0}≥4.5</small></div></div>
+     <div class="kpi"><div class="kl">Hazards</div><div class="kv">${c.hazards??"—"}</div></div>
+     <div class="kpi"><div class="kl">Satellites</div><div class="kv">${(SAT_OBJS.length||c.satellites)??"—"}</div></div>
+     <div class="kpi"><div class="kl">Flights</div><div class="kv">${g.flights_tracked??c.flights??"—"}</div></div>`;
+}
+function renderStatus(){
+  if(!DATA)return;const c=DATA.counts||{};
+  const iss=findISS();const issTxt=iss?`ISS ${Math.round(iss.km)} km · ${iss.lat.toFixed(0)},${iss.lng.toFixed(0)}`:"ISS —";
+  document.getElementById("statusbar").innerHTML=
+    `<span class="dotlive"></span><b>LIVE</b> · ${new Date().toUTCString().replace("GMT","UTC")}`+
+    `<span>🛰️ ${issTxt}</span><span>✈️ ${(DATA.flights||[]).length} aircraft</span>`+
+    `<span>🌀 ${c.hazards??0} hazards · ⚡ ${c.quakes_24h??0} quakes</span>`+
+    `<span class="sp">snapshot ${new Date(DATA.generated).toLocaleTimeString()} · auto-refresh 2m</span>`;
+}
+function findISS(){return SAT_OBJS.find(s=>/ISS \(ZARYA\)|^ISS/.test(s.name))||null;}
+
+/* ---------- next-pass prediction over your configured location (satellite.js look angles) ---------- */
+const OBSERVER=WL.observer||(PRESENCES[0]?{lat:PRESENCES[0].lat,lon:PRESENCES[0].lon,name:PRESENCES[0].name}:null);
+const OBS_GD=OBSERVER?{longitude:OBSERVER.lon*Math.PI/180,latitude:OBSERVER.lat*Math.PI/180,height:.02}:null;
+function nextPass(rec){
+  if(!rec||!OBS_GD||typeof satellite==="undefined")return null;
+  try{
+    for(let s=0;s<6*3600;s+=30){
+      const t=new Date(Date.now()+s*1000);
+      const pv=satellite.propagate(rec,t);if(!pv.position)continue;
+      const look=satellite.ecfToLookAngles(OBS_GD,satellite.eciToEcf(pv.position,satellite.gstime(t)));
+      if(look.elevation>10*Math.PI/180){
+        const mins=Math.round(s/60);
+        return {when:mins<1?"now":(mins<60?mins+" min":Math.floor(mins/60)+"h "+(mins%60)+"m"),
+                el:look.elevation*180/Math.PI};
+      }
+    }
+  }catch(e){}
+  return null;
+}
+
+/* ---------- Situation Brief (synthesized intelligence report) ---------- */
+function showBrief(){
+  if(!DATA){P.em.textContent="◎";P.t.textContent="Situation Brief";P.b.innerHTML=`<p class="muted">Loading…</p>`;openPanel();return;}
+  const st=DATA.stress||{},c=DATA.counts||{},g=DATA.globals||{},sk=DATA.sky||{};
+  const qs=[...(DATA.quakes||[])].sort((a,b)=>b.mag-a.mag);
+  const hz=DATA.hazards||[];const hzc={};for(const h of hz)hzc[h.kind]=(hzc[h.kind]||0)+1;
+  const mkts=[...(DATA.indices||[]),...(DATA.crypto||[])];
+  const iss=findISS();const pass=iss?nextPass(iss.rec):null;
+  const kp=DATA.space_weather||{};
+  P.em.textContent="◎";P.t.textContent="Situation Brief";P.s.textContent=new Date().toUTCString().replace("GMT","UTC");
+  let h=`<div class="cards">`+
+    card("Global stress",st.score??"—",st.band||"")+
+    card("Space weather","Kp "+(kp.kp??"—"),kp.level||"")+`</div>`;
+  h+=`<div class="mini">⚡ Seismic — ${c.quakes_24h??0} in 24h (${c.quakes_sig??0} significant)</div>`;
+  for(const q of qs.slice(0,3))h+=`<div class="ev" onclick='window.__fly(${q.lat},${q.lon})'><div class="ic">⚡</div><div><div class="tx">M${q.mag} — ${esc(q.place)}</div><div class="mt">${fmtAgo(q.time)}</div></div></div>`;
+  h+=`<div class="mini">🌀 Active hazards — ${hz.length}</div><div style="font-size:12.5px;line-height:1.9">`+
+    Object.entries(hzc).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<span class="lay" style="display:inline-flex;margin:0 6px 6px 0;padding:3px 9px">${HAZ_EM[k]||"📍"} ${k} <b style="margin-left:5px">${n}</b></span>`).join("")+`</div>`;
+  h+=`<div class="mini">🛰️ Orbital — ${SAT_OBJS.length} tracked</div>`;
+  if(iss)h+=kv("ISS altitude",Math.round(iss.km)+" km")+(OBSERVER?(pass?kv("Next "+(OBSERVER.name||"you")+" pass",pass.when+" · "+Math.round(pass.el)+"° max"):kv("Next "+(OBSERVER.name||"you")+" pass","none in 6h")):"");
+  h+=`<div class="mini">📈 Markets</div><div style="font-size:12.5px;line-height:1.85">`+
+    mkts.map(m=>`${m.name||m.symbol} <b class="${m.chg_pct>=0?'up':'down'}">${m.chg_pct>=0?'+':''}${m.chg_pct}%</b>`).join(" · ")+`</div>`;
+  if(sk.sun)h+=`<div class="mini">✨ Sky</div>`+kv("Sun",sk.sun.sign_glyph+" "+sk.sun.sign+" "+sk.sun.deg+"°")+kv("Moon",(sk.moon?.phase_emoji||"")+" "+(sk.moon?.phase||"")+" · "+(sk.moon?.illum||0)+"%");
+  h+=`<p style="color:var(--muted);font-size:11px;margin-top:14px">Synthesized from live keyless feeds · read-only.</p>`;
+  P.b.innerHTML=h;openPanel();
+}
+function showHelp(){
+  P.em.textContent="🌍";P.t.textContent="Worldlens · Help";P.s.textContent="keyless & read-only";
+  P.b.innerHTML=`
+  <p style="font-size:13px;line-height:1.6">A live, photoreal Earth built from free public feeds — no API keys, nothing to sign in to, nothing sent anywhere.</p>
+  <div class="mini">Get around</div>
+  <div style="font-size:12.5px;line-height:1.85">
+   • <b>Drag</b> to spin · <b>scroll</b> to zoom<br>
+   • <b>Click a country</b> → drill into its live weather, air, quakes, hazards, flights<br>
+   • <b>Click a satellite</b> → track its live orbit (+ next pass over your location)<br>
+   • <b>Hover a planet / the Moon</b> → its name &amp; zodiac position<br>
+   • <b>Search</b> a country up top to fly there</div>
+  <div class="mini">Panels</div>
+  <div style="font-size:12.5px;line-height:1.85">
+   • <b>◎ Situation Brief</b> — synthesized intelligence report<br>
+   • Tap the <b>Stress score</b> → global readout · the <b>Sky</b> chip → zodiac &amp; moon</div>
+  <div class="mini">Lenses &amp; layers (left rail)</div>
+  <div style="font-size:12.5px;line-height:1.7">
+   • <b>Lenses</b> — one click isolates a correlated dataset: <i>Seismic, Weather, Fire risk, Air,
+   Aviation, Orbital, Threats</i> (problems only), <i>Macro/Trade</i> (where trading data plugs in).<br>
+   • Click a <b>group header</b> to toggle the whole group · <b>All / None</b> for everything.<br>
+   • Or toggle any single layer: quakes, hazards, wind, temp, clouds, air, flights,
+   <b>1,700+ satellites</b>, planets, Sun &amp; Moon, constellations, stars.</div>
+  <div class="mini">Data sources</div>
+  <div style="font-size:11.5px;color:var(--muted);line-height:1.6">USGS · NASA EONET · NOAA SWPC · Open-Meteo · Yahoo · CoinGecko · adsb.lol · Celestrak (SGP4) · on-device astronomy. Day/night + clouds leverage globe.gl's MIT examples.</div>
+  <p style="font-size:11px;color:var(--muted);margin-top:14px">Beta: needs internet for the 3D engine + map textures. If it can't load, use the <a href="/dashboard.html" style="color:var(--cyan)">Dashboard view</a>. Report anything odd — snapshot auto-refreshes every 2 min.</p>`;
+  openPanel();
+}
+function showTrade(){
+  if(!DATA){P.em.textContent="💹";P.t.textContent="Trade Desk";P.b.innerHTML=`<p class="muted">Loading…</p>`;openPanel();return;}
+  const cm=DATA.commodities||[],byg={};for(const c of cm)(byg[c.group]=byg[c.group]||[]).push(c);
+  const atrisk=SUPPLY_NODES.filter(n=>NODE_RISK[n[0]]);
+  P.em.textContent="💹";P.t.textContent="Trade Desk";P.s.textContent="commodities · supply risk";
+  let h=`<div class="mini">Supply risk — ${atrisk.length} node${atrisk.length===1?"":"s"} flagged</div>`;
+  if(atrisk.length)for(const n of atrisk.slice(0,8)){const rk=NODE_RISK[n[0]];
+    h+=`<div class="ev" onclick='window.__fly(${n[2]},${n[3]})'><div class="ic">${SECTOR_ICON[n[1]]}</div><div><div class="tx">${esc(n[0])}</div><div class="mt">${esc(rk.why.join(" · "))}</div></div></div>`;}
+  else h+=`<p class="muted" style="font-size:12.5px">No supply nodes under active weather/hazard threat right now — all clear.</p>`;
+  for(const [g,lab] of [["energy","⛽ Energy"],["metals","⚙️ Metals"],["agri","🌾 Agri"],["rates","📈 Rates & $"]]){
+    if(!byg[g])continue;
+    h+=`<div class="mini">${lab}</div>`+byg[g].map(c=>kv(c.name,`<span class="${c.chg_pct>=0?'up':'down'}">${c.price} · ${c.chg_pct>=0?'+':''}${c.chg_pct}%</span>`)).join("");
+  }
+  const mk=[...(DATA.indices||[]),...(DATA.crypto||[])];
+  if(mk.length)h+=`<div class="mini">Markets</div><div style="font-size:12px;line-height:1.85">`+mk.map(m=>`${m.name||m.symbol} <b class="${m.chg_pct>=0?'up':'down'}">${m.chg_pct>=0?'+':''}${m.chg_pct}%</b>`).join(" · ")+`</div>`;
+  h+=`<p style="font-size:11px;color:var(--muted);margin-top:13px">Nodes flag <span style="color:#ef4444">red</span> on the globe when hazards/severe weather sit within ~650 km. Flip the ⛽/🌾/⚙️/🚢 lenses to watch the correlation — the seed of a supply-driven trade.</p>`;
+  P.b.innerHTML=h;openPanel();
+}
+function applyLite(){
+  if(BLOOM)BLOOM.enabled=!LITE;
+  if(CLOUDS)CLOUDS.visible=!LITE&&on.cloudveil;
+  const b=document.getElementById("liteBtn");
+  if(b){b.textContent=LITE?"⚡ Lite ✓":"⚡ Lite";b.style.color=LITE?"#04121f":"";b.style.background=LITE?"var(--amber)":"";b.style.borderColor=LITE?"var(--amber)":"";}
+  if(globe)updateObjects();
+}
+function toggleLite(){LITE=!LITE;try{localStorage.setItem("wg_lite",LITE?"1":"0");}catch(e){}applyLite();}
+function flyHome(){const z=PRESENCES[0];if(z&&globe){on.ziggy=true;syncAll();
+  smoothFly(z.lat,z.lon,1.25,1300);
+  setTimeout(()=>showMarker({type:"presence",raw:z}),1400);}}
+function toggleRail(){const r=document.querySelector(".rail");if(!r)return;r.classList.toggle("collapsed");
+  try{localStorage.setItem("wg_rail",r.classList.contains("collapsed")?"1":"0");}catch(e){}}
+Object.assign(window,{showBrief,showHelp,showTrade,flyHome,toggleRail,toggleLite,allLayers,trackISS:()=>{const i=findISS();if(i)selectSat(i);return !!i;}});
+
+/* ---------- view ---------- */
+// pointOfView's built-in transition is broken under the module/bloom render loop, so animate manually.
+function smoothFly(lat,lng,alt,ms){
+  if(!globe)return;globe.controls().autoRotate=false;
+  const s=globe.pointOfView();let dLng=lng-s.lng;if(dLng>180)dLng-=360;if(dLng<-180)dLng+=360;
+  const t0=performance.now();
+  (function step(now){const k=Math.min(1,(now-t0)/(ms||1000));const e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+    globe.pointOfView({lat:s.lat+(lat-s.lat)*e,lng:s.lng+dLng*e,altitude:s.altitude+(alt-s.altitude)*e},0);
+    if(k<1)requestAnimationFrame(step);})(t0);
+}
+function flyToCountry(c){const b=bboxCenter(c.geometry);const alt=Math.max(.5,Math.min(2.2,b.span/40+.55));smoothFly(b.lat,b.lng,alt,1000);}
+function resetView(){smoothFly(20,0,2.4,1000);}
+
+/* ---------- lenses (curated, correlative dataset presets to isolate a signal) ---------- */
+const LENSES=[
+  {id:"overview",icon:"🌍",label:"Overview",desc:"balanced situational view",
+   on:["quake","hazard","gdacs","wind","sats","planets","sunmoon","cloudveil","stars","iss"]},
+  {id:"seismic",icon:"⚡",label:"Seismic",desc:"earthquakes + geophysical hazards",
+   on:["quake","hazard","gdacs","stars","cloudveil"]},
+  {id:"weather",icon:"🌦️",label:"Weather",desc:"wind · temp · precip · clouds · humidity",
+   on:["wind","temp","precip","clouds","humidity","cloudveil","stars"]},
+  {id:"fire",icon:"🔥",label:"Fire risk",desc:"hot + dry + windy + active fires (correlated)",
+   on:["temp","wind","humidity","hazard","air","stars"]},
+  {id:"air",icon:"🫁",label:"Air",desc:"air quality + cloud cover",
+   on:["air","cloudveil","humidity","stars"]},
+  {id:"aviation",icon:"✈️",label:"Aviation",desc:"civil + military air traffic",
+   on:["flights","mil","cloudveil","stars"]},
+  {id:"orbital",icon:"🛰️",label:"Orbital",desc:"satellites · planets · sun/moon · stars",
+   on:["sats","planets","sunmoon","constel","stars","iss"]},
+  {id:"threats",icon:"🚨",label:"Threats",desc:"active problems only — hazards, quakes, bad air",
+   on:["hazard","quake","gdacs","air","stars"]},
+  {id:"energy",icon:"⛽",label:"Energy",desc:"oil/gas nodes + chokepoints + hazards + wind — spot supply disruption",
+   on:["nodes_energy","chokepoints","traderoutes","hazard","wind","stars"]},
+  {id:"agri",icon:"🌾",label:"Agri",desc:"grain/soft belts + temp + rain + humidity — crop-weather risk",
+   on:["nodes_agri","temp","precip","humidity","stars"]},
+  {id:"metals",icon:"⚙️",label:"Metals & chips",desc:"mines + chip fabs + earthquakes — hard-asset & semiconductor risk",
+   on:["nodes_metals","nodes_chips","quake","hazard","stars"]},
+  {id:"shipping",icon:"🚢",label:"Shipping",desc:"chokepoints + air freight + hazards + wind — logistics/freight risk",
+   on:["chokepoints","traderoutes","flights","hazard","wind","stars"]},
+  {id:"macro",icon:"💹",label:"Macro",desc:"whole supply map + disruptions + markets readout",
+   on:["nodes_energy","nodes_metals","nodes_chips","nodes_agri","chokepoints","traderoutes","gdacs","hazard","wind","stars"]},
+];
+let ACTIVE_LENS="overview";
+function applyLens(id){
+  const lens=LENSES.find(l=>l.id===id);if(!lens)return;
+  ACTIVE_LENS=id;const set=new Set(lens.on);
+  for(const k in on)on[k]=set.has(k);
+  syncAll();
+}
+function allLayers(v){for(const k in on)on[k]=v;ACTIVE_LENS=v?null:"__none";syncAll();}
+function toggleGroup(name){
+  const g=GROUPS.find(x=>x.name===name);if(!g)return;
+  const anyOff=g.items.some(it=>!on[it.id]);
+  for(const it of g.items)on[it.id]=anyOff;
+  ACTIVE_LENS=null;syncAll();
+}
+function syncAll(){  // central: push state to the globe + re-sync all UI
+  applyStars();
+  if(CLOUDS)CLOUDS.visible=!LITE&&on.cloudveil;
+  refresh();
+  document.querySelectorAll(".lay").forEach(el=>{const id=el.dataset.id;if(id)el.className="lay"+(on[id]?"":" off");});
+  renderLenses();updateGroupStates();
+}
+function renderLenses(){
+  const box=document.getElementById("lenses");if(!box)return;box.innerHTML="";
+  for(const l of LENSES){
+    const d=document.createElement("div");d.className="lens"+(ACTIVE_LENS===l.id?" active":"");
+    d.innerHTML=`<span>${l.icon}</span>${l.label}`;d.title=l.desc;
+    d.onclick=()=>applyLens(l.id);box.appendChild(d);
+  }
+}
+function updateGroupStates(){
+  for(const G of GROUPS){
+    const el=document.getElementById("gc-"+G.name.replace(/[^a-z]/gi,""));
+    if(!el)continue;const n=G.items.filter(it=>on[it.id]).length;
+    el.textContent=n+"/"+G.items.length;el.style.color=n===0?"var(--muted)":n===G.items.length?"var(--cyan)":"var(--amber)";
+  }
+}
+
+/* ---------- layers UI ---------- */
+function renderLayers(){
+  const box=document.getElementById("layers");box.innerHTML="";
+  for(const G of GROUPS){
+    const gid=G.name.replace(/[^a-z]/gi,"");
+    const h=document.createElement("div");h.className="grp clk";
+    h.innerHTML=`<span>${G.name}</span><span class="gc" id="gc-${gid}"></span>`;
+    h.title="Toggle the whole "+G.name+" group";
+    h.onclick=()=>toggleGroup(G.name);
+    box.appendChild(h);
+    for(const L of G.items){
+      const d=document.createElement("div");d.className="lay"+(on[L.id]?"":" off");d.dataset.id=L.id;
+      d.innerHTML=`<i style="background:${L.col};color:${L.col}"></i>${L.label}<span class="ct" id="ct-${L.id}"></span>`;
+      d.onclick=()=>{on[L.id]=!on[L.id];ACTIVE_LENS=null;syncAll();};
+      box.appendChild(d);
+    }
+  }
+  renderLenses();updateGroupStates();
+}
+function updateLayerCounts(){
+  if(!DATA)return;
+  const wp=(DATA.weather_grid||[]).length;
+  const c={quake:(DATA.quakes||[]).length,hazard:(DATA.hazards||[]).length,wind:wp,temp:wp,
+    precip:(DATA.weather_grid||[]).filter(w=>w.precip>0).length,
+    clouds:(DATA.weather_grid||[]).filter(w=>w.cloud>=35).length,humidity:wp,pressure:wp,cloudveil:"✦",
+    air:(DATA.air_grid||[]).length,
+    flights:(DATA.flights||[]).filter(f=>!f.mil).length,mil:(DATA.flights||[]).filter(f=>f.mil).length,
+    sats:SAT_OBJS.length||(DATA.satellites||[]).length,planets:7,sunmoon:2,constel:STARS.length,stars:"✦",
+    cities:CITIES.length,iss:DATA.iss?1:0,news:(DATA.news_hotspots||[]).length};
+  for(const k in c){const el=document.getElementById("ct-"+k);if(el)el.textContent=c[k];}
+}
+function renderStress(){
+  const st=DATA.stress||{score:0,band:"—"};
+  const cls={Calm:"b-calm",Elevated:"b-elev",Tense:"b-tense",Critical:"b-crit"}[st.band]||"";
+  document.getElementById("stressChip").innerHTML=`<div class="lb">Global Stress Index</div><div class="v ${cls}">${st.score}</div><div class="band ${cls}">${st.band}</div><div class="tap">tap for global readout ›</div>`;
+  if(DATA.sky){const m=DATA.sky.moon,su=DATA.sky.sun;
+    document.getElementById("skyLine").innerHTML=`☉ ${su.sign_glyph} ${su.sign} · ${m.phase_emoji} ${m.illum}%`;}
+  document.getElementById("updated").textContent="Live · "+new Date(DATA.generated).toLocaleString();
+  renderKPIs();renderStatus();
+}
+
+/* ---------- search ---------- */
+document.getElementById("search").addEventListener("keydown",e=>{
+  if(e.key!=="Enter")return;const q=e.target.value.trim().toLowerCase();if(!q)return;
+  const c=COUNTRIES.find(c=>((c.properties.ADMIN||c.properties.NAME||"").toLowerCase().includes(q)));
+  if(c){selected=c;refresh();flyToCountry(c);showCountry(c);e.target.blur();}
+});
+
+/* ---------- init ---------- */
+async function init(){
+  try{LITE=localStorage.getItem("wg_lite")==="1";
+    if(localStorage.getItem("wg_rail")==="1")document.getElementById("rail").classList.add("collapsed");}catch(e){}
+  const [snap,geo]=await Promise.all([
+    fetch("/world-status.json?t="+Date.now()).then(r=>r.json()),
+    fetch(GEO_URL).then(r=>r.json()).catch(()=>fetch(GEO_FALLBACK).then(r=>r.json())),
+  ]);
+  DATA=snap;COUNTRIES=geo.features.filter(f=>f.properties.ADMIN!=="Antarctica");computeCountryCounts();computeSupplyRisk();
+  if(typeof Globe==="undefined"){document.getElementById("loading").innerHTML="3D globe needs internet to load. Try the <a href='/dashboard.html' style='color:#38bdf8'>Dashboard view</a>.";return;}
+  DN_MAT=makeDayNight();
+  globe=Globe()(document.getElementById("globe"))
+    .backgroundImageUrl("https://unpkg.com/three-globe@2.30.0/example/img/night-sky.png")
+    .backgroundColor("#050912").atmosphereColor("#5eb3f6").atmosphereAltitude(.26)
+    .polygonsData(COUNTRIES).polygonCapColor(heatColor)
+    .polygonSideColor(()=>"rgba(0,0,0,0)").polygonStrokeColor(()=>"rgba(205,220,245,.16)")
+    .polygonAltitude(.006).polygonsTransitionDuration(200)
+    .polygonLabel(c=>`<div style="font:600 13px sans-serif;color:#e6edf7">${esc(c.properties.ADMIN)}</div><div style="font:11px sans-serif;color:#8fa0bd">${c.__count||0} live event${c.__count===1?"":"s"} · click to drill in</div>`)
+    .onPolygonHover(c=>{hovered=c;refresh();document.body.style.cursor=c?"pointer":"default";})
+    .onPolygonClick(c=>{selected=(selected===c?null:c);refresh();if(selected){flyToCountry(c);showCountry(c);}else{closePanel();resetView();}})
+    .pointLat("lat").pointLng("lng").pointColor("color").pointAltitude("alt").pointRadius("r")
+    .pointLabel("label").pointsMerge(false).pointResolution(4)
+    .onPointClick(p=>{showMarker(p);if(p.type!=="sat"&&p.type!=="presence")smoothFly(p.lat,p.lng,.85,900);})
+    .pathColor(d=>d.color).pathDashLength(d=>d.kind==="wind"?.4:1).pathDashGap(d=>d.kind==="wind"?.22:0).pathDashAnimateTime(2400).pathStroke(d=>d.kind==="orbit"?1.4:null).pathTransitionDuration(0)
+    .labelLat("lat").labelLng("lng").labelText("text").labelSize(d=>d.size||.8).labelDotRadius(d=>d.dot??0)
+    .labelColor(d=>d.color||"rgba(230,237,247,.75)").labelResolution(2).labelAltitude(d=>d.alt??.01)
+    .labelLabel(d=>d.ltype==="planet"?`${d.raw.glyph} ${d.raw.name} — ${d.raw.sign} ${d.raw.deg}°`:(d.ltype==="sun"?"☀️ Sun (overhead)":d.ltype==="moon"?"🌙 Moon (overhead)":d.text))
+    .onLabelClick(d=>{if(d.ltype==="planet")showPlanet(d.raw);else if(d.ltype==="sun"||d.ltype==="moon")showSky();})
+    .ringColor(d=>t=>`rgba(${d.rgb},${1-t})`).ringMaxRadius(d=>d.max||5).ringPropagationSpeed(2.4).ringRepeatPeriod(d=>d.period||900)
+    .arcStartLat(d=>d.sLat).arcStartLng(d=>d.sLng).arcEndLat(d=>d.eLat).arcEndLng(d=>d.eLng)
+    .arcColor(d=>d.color).arcStroke(.6).arcDashLength(.4).arcDashGap(1.4)
+    .arcDashInitialGap(()=>Math.random()*2).arcDashAnimateTime(2600).arcAltitudeAutoScale(.45)
+    .arcLabel(d=>`🔀 ${esc(d.label)}`).arcsTransitionDuration(0)
+    .objectLat("lat").objectLng("lng").objectAltitude("alt").objectThreeObject(d=>d.mesh)
+    .objectLabel(d=>d.label?d.label:(d.rec?`🛰️ ${esc(d.name)}<br><span style="color:#8fa0bd">${d.group} · ${d.km} km · click to track</span>`:(d.raw?`${d.layer}`:"")))
+    .onObjectClick(d=>{if(d.kind==="planet")showPlanet(d.body);else if(d.kind)showSky();else if(d.rec)selectSat(d);else if(d.raw)showMarker({type:d.layer,raw:d.raw,lat:d.lat,lng:d.lng});})
+    .onGlobeClick(()=>{if(SEL_SAT){SEL_SAT=null;ORBIT_SEGS=[];globe.pathsData(buildPaths());}if(selected){selected=null;refresh();resetView();}closePanel();});
+  globe.pathPoints(d=>d.pts).pathPointLat(p=>p[0]).pathPointLng(p=>p[1]).pathPointAlt(p=>p[2]);
+  if(DN_MAT)globe.globeMaterial(DN_MAT);
+  globe.onZoom(pov=>{if(DN_MAT)DN_MAT.uniforms.globeRotation.value.set(pov.lng,pov.lat);});
+  SUN_LIGHT=new THREE.DirectionalLight(0xffffff,1.7);
+  globe.lights([new THREE.AmbientLight(0xffffff,0.14),SUN_LIGHT]);  // sun-lit planets/Moon + clouds
+  updateSun();
+  addClouds();
+  applyStars();
+  buildSatObjs();buildMarkerGlows();buildCelestial();propagateSats();updateObjects();startTwinkle();
+  globe.controls().autoRotate=true;globe.controls().autoRotateSpeed=.4;
+  globe.controls().addEventListener("start",()=>globe.controls().autoRotate=false);
+  globe.pointOfView({lat:20,lng:0,altitude:2.5});
+  const rz=()=>globe.width(window.innerWidth).height(window.innerHeight);rz();window.addEventListener("resize",rz);
+  // cinematic bloom — makes every luminous data object (satellites, event glows, city lights) glow
+  try{
+    if(UnrealBloomPass && globe.postProcessingComposer){
+      BLOOM=new UnrealBloomPass(new THREE.Vector2(window.innerWidth,window.innerHeight),0.8,0.5,0.55);
+      globe.postProcessingComposer().addPass(BLOOM);
+    }
+  }catch(e){console.warn("bloom unavailable",e);}
+  renderLayers();renderStress();refresh();
+  applyLite();  // honor saved Lite preference
+  document.getElementById("loading").style.display="none";
+  // live tick: propagate satellites + move Sun/Moon sub-points
+  setInterval(()=>{
+    if(!(on.sats||on.sunmoon||on.planets))return;
+    if(on.sats)propagateSats();
+    updateObjects();  // also refreshes Sun/Moon/planet sky positions
+    if(on.sunmoon||on.planets)globe.labelsData(buildLabels());
+    updateLayerCounts();
+  },1500);
+  setInterval(()=>{renderStatus();updateSun();},1000);  // live UTC clock + ISS readout + moving terminator
+  // data refresh: new feeds + fresh TLEs
+  setInterval(async()=>{try{const s=await fetch("/world-status.json?t="+Date.now()).then(r=>r.json());DATA=s;computeCountryCounts();computeSupplyRisk();buildSatObjs();buildMarkerGlows();buildCelestial();propagateSats();updateObjects();renderStress();refresh();}catch(e){}},120000);
+}
+let _starsSet=null;
+function applyStars(){if(!globe)return;const want=on.stars;if(want===_starsSet)return;_starsSet=want;globe.backgroundImageUrl(want?NIGHT_SKY:null);}
+// expose handlers used by inline onclick= in a module scope
+Object.assign(window,{closePanel,showGlobal,showSky});
+
+// load 3D libs (esm.sh, three pinned so globe.gl + bloom share one instance), then boot
+(async()=>{
+  try{
+    const THREE_URL="https://esm.sh/three@0.180.0";
+    Globe=(await import("https://esm.sh/globe.gl@2.32.0?deps=three@0.180.0")).default;
+    THREE=await import(THREE_URL);
+    UnrealBloomPass=(await import(THREE_URL+"/examples/jsm/postprocessing/UnrealBloomPass.js")).UnrealBloomPass;
+    solar=await import("https://esm.sh/solar-calculator@0.3");
+  }catch(e){
+    document.getElementById("loading").innerHTML="3D engine needs internet to load. Try the <a href='/dashboard.html' style='color:#38bdf8'>Dashboard view</a>.";
+    return;
+  }
+  init().catch(e=>{document.getElementById("loading").textContent="Load error: "+e;});
+})();
+</script>
+</body>
+</html>
