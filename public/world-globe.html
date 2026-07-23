@@ -187,7 +187,9 @@ const GROUPS=[
   {name:"Cyber threat",items:[
     {id:"cyber_src",label:"Attack sources",col:"#ff4d4d"},
     {id:"cyber_arcs",label:"Attack streams",col:"#ff7849"},
-    {id:"cyber_c2",label:"Botnet C2",col:"#c084fc"}]},
+    {id:"cyber_c2",label:"Botnet C2",col:"#c084fc"},
+    {id:"cyber_ransom",label:"Ransomware hits",col:"#f43f5e"},
+    {id:"cyber_tor",label:"Tor exit nodes",col:"#a78bfa"}]},
   {name:"Trade & supply",items:[
     {id:"nodes_energy",label:"Energy nodes",col:"#fb923c"},
     {id:"nodes_metals",label:"Metals & mining",col:"#a8b3c4"},
@@ -211,7 +213,7 @@ const on={quake:true,hazard:true,wind:true,temp:false,precip:false,clouds:false,
   pressure:false,cloudveil:true,air:false,flights:false,mil:false,sats:true,planets:true,sunmoon:true,
   constel:false,stars:true,cities:false,iss:true,ziggy:true,
   gdacs:true,nodes_energy:false,nodes_metals:false,nodes_chips:false,nodes_agri:false,chokepoints:false,traderoutes:false,
-  cyber_src:false,cyber_arcs:false,cyber_c2:false};
+  cyber_src:false,cyber_arcs:false,cyber_c2:false,cyber_ransom:false,cyber_tor:false};
 /* per-planet colours + emoji (astro glyphs tofu in the WebGL label font, so use emoji) */
 const PLANET_COL={Mercury:"#cbd5e1",Venus:"#fde68a",Mars:"#f87171",Jupiter:"#fbbf24",
   Saturn:"#fcd34d",Uranus:"#67e8f9",Neptune:"#60a5fa",Pluto:"#d6a06a"};
@@ -407,7 +409,37 @@ function glowSprite(color,size){
     color:new THREE.Color(color),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true,opacity:.85});
   const s=new THREE.Sprite(GLOW_MAT[color]); s.scale.set(size,size,1); return s;
 }
-/* glowing halos for surface events (earthquakes, hazards) — the clickable pointsData bars sit under them as cores */
+/* 3D emoji billboards (canvas -> sprite so color emoji always render) */
+const _emojiTex={};
+function emojiTexture(em){
+  if(_emojiTex[em]||typeof THREE==="undefined")return _emojiTex[em];
+  const c=document.createElement("canvas");c.width=c.height=128;const x=c.getContext("2d");
+  x.font='96px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  x.textAlign="center";x.textBaseline="middle";x.fillText(em,64,70);
+  const t=new THREE.CanvasTexture(c);_emojiTex[em]=t;return t;
+}
+function emojiSprite(em,size){
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:emojiTexture(em),transparent:true,depthWrite:false}));
+  s.scale.set(size,size,1);return s;
+}
+/* sharp red cyber threat-blip (attack sources) */
+let THREAT_TEX=null;
+function threatTexture(){
+  if(THREAT_TEX||typeof THREE==="undefined")return THREAT_TEX;
+  const c=document.createElement("canvas");c.width=c.height=64;const x=c.getContext("2d");
+  let g=x.createRadialGradient(32,32,1,32,32,30);
+  g.addColorStop(0,"rgba(255,180,180,.98)");g.addColorStop(.45,"rgba(255,50,50,.6)");g.addColorStop(1,"rgba(255,0,0,0)");
+  x.fillStyle=g;x.fillRect(0,0,64,64);
+  x.translate(32,32);x.rotate(Math.PI/4);
+  x.fillStyle="#fff0f0";x.strokeStyle="#ff2b2b";x.lineWidth=3;
+  x.beginPath();x.rect(-8,-8,16,16);x.fill();x.stroke();
+  THREAT_TEX=new THREE.CanvasTexture(c);return THREAT_TEX;
+}
+function threatSprite(size){
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:threatTexture(),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  s.scale.set(size,size,1);return s;
+}
+/* glowing halos for surface events (earthquakes, hazards, disaster alerts) */
 let MARKER_GLOWS=[];
 function buildMarkerGlows(){
   MARKER_GLOWS=[];
@@ -416,6 +448,19 @@ function buildMarkerGlows(){
     MARKER_GLOWS.push({lat:q.lat,lng:q.lon,alt:.02,layer:"quake",raw:q,mesh:glowSprite(magColor(q.mag),sz)});}
   for(const h of DATA.hazards||[]){
     MARKER_GLOWS.push({lat:h.lat,lng:h.lon,alt:.02,layer:"hazard",raw:h,mesh:glowSprite(HAZ_COL[h.kind]||"#fb7185",3.4)});}
+  for(const d of DATA.gdacs||[])
+    MARKER_GLOWS.push({lat:d.lat,lng:d.lon,alt:.03,layer:"gdacs",raw:d,label:`${d.icon||"🚨"} ${esc(d.name||"")}`,mesh:emojiSprite(d.icon||"🚨",Math.min(5.2,3+(d.sev||1)*.6))});
+}
+/* cyber threat markers as 3D icons (threat-blip / spider / skull / onion) */
+let CYBER_OBJS=[];
+function buildCyberObjs(){
+  CYBER_OBJS=[];
+  if(typeof THREE==="undefined"||!DATA)return;
+  const CY=DATA.cyber||{};
+  for(const a of CY.attackers||[])CYBER_OBJS.push({lat:a.lat,lng:a.lon,alt:.03,ckey:"cyber_src",layer:"cyberatk",raw:a,label:`🛑 Attack source · ${esc(a.country||a.cc||"?")}`,mesh:threatSprite(2.4)});
+  for(const c of CY.c2||[])CYBER_OBJS.push({lat:c.lat,lng:c.lon,alt:.038,ckey:"cyber_c2",layer:"cyberc2",raw:c,label:`🕷️ ${esc(c.malware||"botnet")} C2`,mesh:emojiSprite("🕷️",3.4)});
+  for(const v of (DATA.ransomware?.victims)||[])CYBER_OBJS.push({lat:v.lat,lng:v.lon,alt:.038,ckey:"cyber_ransom",layer:"cyberransom",raw:v,label:`💀 ${esc(v.group)} → ${esc(v.victim)}`,mesh:emojiSprite("💀",3.0)});
+  for(const n of (DATA.tor?.nodes)||[])CYBER_OBJS.push({lat:n.lat,lng:n.lon,alt:.03,ckey:"cyber_tor",layer:"cybertor",raw:n,label:`🧅 Tor exit · ${esc(n.country||n.cc||"?")}`,mesh:emojiSprite("🧅",2.0)});
 }
 /* --- satellite orbit trail (SGP4 sampled ~1 orbit, split at the dateline) --- */
 let SEL_SAT=null, ORBIT_SEGS=[];
@@ -545,7 +590,8 @@ function updateObjects(){
     if(LITE){const step=Math.max(1,Math.floor(SAT_OBJS.length/LITE_SAT_CAP));for(let i=0;i<SAT_OBJS.length;i+=step)objs.push(SAT_OBJS[i]);}
     else for(const s of SAT_OBJS)objs.push(s);
   }
-  for(const m of MARKER_GLOWS)if((m.layer==="quake"&&on.quake)||(m.layer==="hazard"&&on.hazard))objs.push(m);
+  for(const m of MARKER_GLOWS)if((m.layer==="quake"&&on.quake)||(m.layer==="hazard"&&on.hazard)||(m.layer==="gdacs"&&on.gdacs))objs.push(m);
+  for(const o of CYBER_OBJS)if(on[o.ckey])objs.push(o);
   for(const c of CELEST){
     if(c.lat==null)continue;
     if((c.kind!=="planet"&&on.sunmoon)||(c.kind==="planet"&&on.planets))objs.push(c);
@@ -579,8 +625,7 @@ function buildPoints(){
   if(!DATA)return[];const pts=[];
   if(on.quake)for(const q of DATA.quakes||[])pts.push({lat:q.lat,lng:q.lon,type:"quake",color:"#fff7e0",r:Math.max(.1,(q.mag-2)*.08),alt:.02,raw:q,label:`⚡ M${q.mag} — ${esc(q.place)}`});
   if(on.hazard)for(const h of DATA.hazards||[])pts.push({lat:h.lat,lng:h.lon,type:"hazard",color:"#fff",r:.11,alt:.02,raw:h,label:`${h.icon} ${esc(h.title)}`});
-  if(on.gdacs)for(const d of DATA.gdacs||[]){const col=d.sev>=3?"#ef4444":d.sev>=2?"#fb923c":"#34d399";
-    pts.push({lat:d.lat,lng:d.lon,type:"gdacs",color:col,r:.13+d.sev*.13,alt:.025,raw:d,label:`${d.icon} ${d.alert} · ${esc(d.name)}`});}
+  // gdacs disaster alerts render as emoji sprites in buildMarkerGlows (no bars)
   if(on.temp)for(const w of DATA.weather_grid||[])pts.push({lat:w.lat,lng:w.lon,type:"temp",color:tempColor(w.temp),r:.9,alt:.002,raw:w,label:`🌡️ ${w.temp}°C / ${cToF(w.temp)}°F`});
   if(on.precip)for(const w of DATA.weather_grid||[]){if(!(w.precip>0))continue;pts.push({lat:w.lat,lng:w.lon,type:"precip",color:precipColor(w.precip),r:Math.min(1.1,.4+w.precip*.12),alt:.003,raw:w,label:`🌧️ ${w.precip} mm`});}
   if(on.clouds)for(const w of DATA.weather_grid||[]){if(!(w.cloud>=35))continue;pts.push({lat:w.lat,lng:w.lon,type:"clouds",color:`rgba(226,232,240,${(.12+w.cloud/100*.5).toFixed(2)})`,r:.6+w.cloud/100*.6,alt:.006,raw:w,label:`☁️ ${w.cloud}% cloud`});}
@@ -599,15 +644,7 @@ function buildPoints(){
   if(on.chokepoints)for(const c of CHOKEPOINTS){const [nm,lat,lon,note]=c;
     pts.push({lat,lng:lon,type:"choke",color:"#f472b6",r:.34,alt:.02,raw:{name:nm,note,lat,lon},
       label:`🚢 ${esc(nm)}<br><span style="color:#8fa0bd">${esc(note)}</span>`});}
-  // --- cyber threat: live attack sources (DShield) + botnet C2 (Feodo) ---
-  const CY=DATA.cyber||{};
-  if(on.cyber_src)for(const a of CY.attackers||[]){
-    const r=Math.min(.6,.18+Math.log10((a.reports||1)+1)*.07);
-    pts.push({lat:a.lat,lng:a.lon,type:"cyberatk",color:"#ff3b3b",r,alt:.03,raw:a,
-      label:`🛑 Attack source · ${esc(a.country||a.cc||"?")}<br><span style="color:#8fa0bd">${(a.reports||0).toLocaleString()} reports</span>`});}
-  if(on.cyber_c2)for(const c of CY.c2||[]){
-    pts.push({lat:c.lat,lng:c.lon,type:"cyberc2",color:"#c084fc",r:.3,alt:.032,raw:c,
-      label:`🕷️ ${esc(c.malware||"botnet")} C2 · ${esc(c.country||c.cc||"?")}`});}
+  // cyber threat markers render as 3D icons in buildCyberObjs (threat-blip / 🕷️ / 💀 / 🧅)
   return pts;
 }
 function buildRings(){ // pulsing rings — strong quakes (amber) + GDACS severity alerts (orange/red)
@@ -760,6 +797,10 @@ function showMarker(p){
     P.b.innerHTML=kv("Origin",esc(r.country||r.cc||"?"))+kv("IP",esc(r.ip))+kv("Network",esc(r.as||"—"))+kv("Reports (24h)",(r.reports||0).toLocaleString())+kv("Distinct targets",r.targets||"—")+kv("Coordinates",r.lat.toFixed(1)+", "+r.lon.toFixed(1))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A top source hitting DShield's global honeypot network. Streams arc toward major internet hubs (illustrative targets — real victims aren't public).</p>`;openPanel();return;
   }else if(p.type==="cyberc2"){P.em.textContent="🕷️";P.t.textContent=esc(r.malware||"Botnet")+" C2";P.s.textContent="abuse.ch Feodo Tracker · online";
     P.b.innerHTML=kv("Malware family",esc(r.malware||"—"))+kv("Country",esc(r.country||r.cc||"?"))+kv("IP",esc(r.ip))+kv("Port",r.port||"—")+kv("Network",esc(r.as||"—"))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A live command-and-control server directing infected machines. Source: abuse.ch, confirmed online.</p>`;openPanel();return;
+  }else if(p.type==="cyberransom"){P.em.textContent="💀";P.t.textContent=esc(r.victim);P.s.textContent="ransomware.live · leak-site posting";
+    P.b.innerHTML=kv("Threat group",esc(r.group))+kv("Sector",esc(r.sector||"—"))+kv("Country",esc(r.cc||"?"))+(r.domain?kv("Domain",esc(r.domain)):"")+kv("Posted",esc(r.date||"—"))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A victim named on a ransomware gang's dark-web leak site. Aggregated by ransomware.live. Marker is country-level (approximate).</p>`;openPanel();return;
+  }else if(p.type==="cybertor"){P.em.textContent="🧅";P.t.textContent="Tor exit node";P.s.textContent="Tor Project · anonymity network";
+    P.b.innerHTML=kv("Country",esc(r.country||r.cc||"?"))+kv("IP",esc(r.ip))+kv("Network",esc(r.as||"—"))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A relay where Tor traffic exits onto the open internet. ${DATA.tor?.total?("~"+DATA.tor.total.toLocaleString()+" exist worldwide; showing a live sample of "+(DATA.tor.shown||0)+"."):""}</p>`;openPanel();return;
   }else if(p.type==="choke"){P.em.textContent="🚢";P.t.textContent=esc(r.name);P.s.textContent="maritime chokepoint";
     P.b.innerHTML=kv("Significance",esc(r.note))+kv("Location",r.lat.toFixed(1)+", "+r.lon.toFixed(1))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A disruption here (weather, conflict, blockage) ripples through global freight and commodity prices.</p>`;openPanel();return;
   }else if(p.type==="sat"){P.em.textContent="🛰️";P.t.textContent=esc(r.name);P.s.textContent=r.group+" · Celestrak · live orbit";
@@ -927,7 +968,14 @@ function showCyber(){
   const kev=cy.kev||[];
   if(kev.length){h+=`<div class="mini">🔓 Actively exploited (CISA KEV · ${cy.kev_recent7||0} added this week)</div>`;
     for(const v of kev.slice(0,6))h+=`<div class="ev"><div class="ic">${v.ransomware==='Known'?'💀':'🔓'}</div><div><div class="tx">${esc(v.vendor||"")} ${esc(v.product||"")}</div><div class="mt">${esc(v.cve||"")} · added ${esc(v.added||"")}</div></div></div>`;}
-  h+=`<p style="color:var(--muted);font-size:11px;margin-top:14px">Real keyless intel: SANS ISC honeypots, abuse.ch botnet tracking, CISA's exploited-vuln catalog. Attack arcs terminate at major internet hubs (illustrative targets — actual victims aren't public). Read-only.</p>`;
+  const rw=DATA.ransomware||{};
+  if((rw.victims||[]).length){
+    h+=`<div class="mini">💀 Recent ransomware victims (${rw.total_posts||rw.count} leak-site posts)</div>`;
+    h+=`<div style="font-size:12px;color:var(--muted);margin-bottom:5px">Top groups: `+(rw.top_groups||[]).slice(0,5).map(([g,n])=>`<b style="color:#f43f5e">${esc(g)}</b> ${n}`).join(" · ")+`</div>`;
+    for(const v of rw.victims.slice(0,5))h+=`<div class="ev"><div class="ic">💀</div><div><div class="tx">${esc(v.victim)}</div><div class="mt">${esc(v.group)} · ${esc(v.sector||v.cc||"")} · ${esc(v.date||"")}</div></div></div>`;}
+  const tor=DATA.tor||{};
+  if(tor.total)h+=`<div class="mini">🧅 Tor anonymity network</div><div style="font-size:12.5px;line-height:1.9">~<b>${tor.total.toLocaleString()}</b> exit nodes worldwide · top: `+(tor.top_countries||[]).slice(0,6).map(([k,n])=>`${esc(k)} <b>${n}</b>`).join(" · ")+`</div>`;
+  h+=`<p style="color:var(--muted);font-size:11px;margin-top:14px">Real keyless intel: SANS ISC honeypots, abuse.ch botnet tracking, CISA's exploited-vuln catalog, ransomware.live leak-site aggregation, Tor Project exit list. Attack arcs terminate at major internet hubs (illustrative targets — actual victims aren't public). Read-only.</p>`;
   P.b.innerHTML=h;openPanel();
 }
 function showHelp(){
@@ -1031,8 +1079,8 @@ const LENSES=[
    on:["chokepoints","traderoutes","flights","hazard","wind","stars"]},
   {id:"macro",icon:"💹",label:"Macro",desc:"whole supply map + disruptions + markets readout",
    on:["nodes_energy","nodes_metals","nodes_chips","nodes_agri","chokepoints","traderoutes","gdacs","hazard","wind","stars"]},
-  {id:"cyber",icon:"🛡️",label:"Cyber",desc:"live attack sources, botnet C2 & attack streams (DShield · Feodo · CISA KEV)",
-   on:["cyber_src","cyber_arcs","cyber_c2","stars","cloudveil"]},
+  {id:"cyber",icon:"🛡️",label:"Cyber",desc:"attack sources, botnet C2, ransomware hits & Tor (DShield · Feodo · CISA KEV · ransomware.live)",
+   on:["cyber_src","cyber_arcs","cyber_c2","cyber_ransom","stars","cloudveil"]},
 ];
 let ACTIVE_LENS="overview";
 function applyLens(id){
@@ -1164,7 +1212,7 @@ async function init(){
   updateSun();
   addClouds();
   applyStars();
-  buildSatObjs();buildMarkerGlows();buildCelestial();propagateSats();updateObjects();startTwinkle();
+  buildSatObjs();buildMarkerGlows();buildCyberObjs();buildCelestial();propagateSats();updateObjects();startTwinkle();
   globe.controls().autoRotate=true;globe.controls().autoRotateSpeed=.4;
   globe.controls().addEventListener("start",()=>globe.controls().autoRotate=false);
   globe.pointOfView({lat:20,lng:0,altitude:2.5});
@@ -1189,7 +1237,7 @@ async function init(){
   },1500);
   setInterval(()=>{renderStatus();updateSun();},1000);  // live UTC clock + ISS readout + moving terminator
   // data refresh: new feeds + fresh TLEs
-  setInterval(async()=>{try{const s=await fetch("/world-status.json?t="+Date.now()).then(r=>r.json());DATA=s;computeCountryCounts();computeSupplyRisk();buildSatObjs();buildMarkerGlows();buildCelestial();propagateSats();updateObjects();renderStress();refresh();}catch(e){}},120000);
+  setInterval(async()=>{try{const s=await fetch("/world-status.json?t="+Date.now()).then(r=>r.json());DATA=s;computeCountryCounts();computeSupplyRisk();buildSatObjs();buildMarkerGlows();buildCyberObjs();buildCelestial();propagateSats();updateObjects();renderStress();refresh();}catch(e){}},120000);
 }
 let _starsSet=null;
 function applyStars(){if(!globe)return;const want=on.stars;if(want===_starsSet)return;_starsSet=want;globe.backgroundImageUrl(want?NIGHT_SKY:null);}

@@ -716,6 +716,84 @@ def get_cyber():
             "updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
 
 
+CC_CENTROID = {
+    "US": (39.8, -98.6), "GB": (54.0, -2.4), "DE": (51.2, 10.4), "FR": (46.6, 2.4),
+    "CA": (56.1, -106.3), "AU": (-25.3, 133.8), "IT": (41.9, 12.6), "ES": (40.2, -3.7),
+    "NL": (52.1, 5.3), "BE": (50.6, 4.6), "CH": (46.8, 8.2), "AT": (47.6, 14.1),
+    "SE": (60.1, 18.6), "NO": (60.5, 8.5), "DK": (56.0, 9.5), "FI": (61.9, 25.7),
+    "PL": (51.9, 19.1), "CZ": (49.8, 15.5), "PT": (39.4, -8.2), "IE": (53.4, -8.2),
+    "GR": (39.1, 21.8), "RO": (45.9, 24.9), "HU": (47.2, 19.5), "IN": (22.0, 79.0),
+    "JP": (36.2, 138.3), "CN": (35.9, 104.2), "KR": (36.5, 127.9), "TW": (23.7, 121.0),
+    "SG": (1.35, 103.8), "MY": (4.2, 101.9), "TH": (15.9, 100.9), "ID": (-2.5, 118.0),
+    "PH": (12.9, 121.8), "VN": (14.1, 108.3), "BR": (-14.2, -51.9), "MX": (23.6, -102.5),
+    "AR": (-38.4, -63.6), "CL": (-35.7, -71.5), "CO": (4.6, -74.3), "PE": (-9.2, -75.0),
+    "ZA": (-30.6, 22.9), "NG": (9.1, 8.7), "EG": (26.8, 30.8), "MA": (31.8, -7.1),
+    "KE": (-0.0, 37.9), "AE": (23.4, 53.8), "SA": (23.9, 45.1), "IL": (31.0, 34.9),
+    "TR": (38.96, 35.2), "RU": (61.5, 105.3), "UA": (48.4, 31.2), "NZ": (-40.9, 174.9),
+    "SK": (48.7, 19.7), "BG": (42.7, 25.5), "HR": (45.1, 15.2), "RS": (44.0, 21.0),
+    "SI": (46.2, 14.8), "LT": (55.2, 23.9), "LV": (56.9, 24.6), "EE": (58.6, 25.0),
+    "LU": (49.8, 6.1), "IS": (64.96, -19.0), "MT": (35.9, 14.4), "CY": (35.1, 33.4),
+    "PK": (30.4, 69.3), "BD": (23.7, 90.4), "LK": (7.9, 80.8), "QA": (25.3, 51.2),
+    "KW": (29.3, 47.5), "JO": (30.6, 36.2), "LB": (33.9, 35.9), "TN": (33.9, 9.6),
+    "DZ": (28.0, 1.7), "GH": (7.9, -1.0), "EC": (-1.8, -78.2), "UY": (-32.5, -55.8),
+    "PA": (8.5, -80.8), "CR": (9.7, -83.8), "DO": (18.7, -70.2), "GT": (15.8, -90.2),
+    "VE": (6.4, -66.6), "PY": (-23.4, -58.4), "BO": (-16.3, -63.6), "HN": (15.2, -86.2),
+}
+
+
+def get_ransomware():
+    """ransomware.live (keyless) — recent ransomware victims by country + threat group.
+    Country 2-letter code -> centroid marker (no geolocation API needed)."""
+    try:
+        rows = fetch("https://api.ransomware.live/v2/recentvictims")
+    except Exception:
+        rows = fetch("https://api.ransomware.live/recentvictims")
+    victims, groups, countries = [], {}, {}
+    for r in rows[:70]:
+        cc = (r.get("country") or "").upper()[:2]
+        cen = CC_CENTROID.get(cc)
+        grp = r.get("group") or r.get("group_name") or "?"
+        groups[grp] = groups.get(grp, 0) + 1
+        if cc:
+            countries[cc] = countries.get(cc, 0) + 1
+        if not cen:
+            continue
+        seed = sum(ord(c) for c in (r.get("domain") or grp))
+        jlat = ((seed % 100) / 100.0 - 0.5) * 6
+        jlon = (((seed // 100) % 100) / 100.0 - 0.5) * 6
+        victims.append({
+            "lat": round(cen[0] + jlat, 3), "lon": round(cen[1] + jlon, 3),
+            "victim": r.get("victim") or r.get("post_title") or r.get("domain") or "(undisclosed)",
+            "domain": r.get("domain"), "group": grp, "cc": cc,
+            "sector": r.get("activity") or r.get("sector") or "",
+            "date": (r.get("attackdate") or r.get("discovered") or "")[:10]})
+    return {"victims": victims,
+            "top_groups": sorted(groups.items(), key=lambda x: -x[1])[:8],
+            "top_countries": sorted(countries.items(), key=lambda x: -x[1])[:8],
+            "count": len(victims), "total_posts": len(rows),
+            "updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
+
+
+def get_tor():
+    """Tor Project bulk exit-node list (keyless). Geolocate a capped sample."""
+    raw = fetch("https://check.torproject.org/torbulkexitlist", parse="text")
+    ips = [ln.strip() for ln in raw.splitlines() if ln.strip() and not ln.startswith("#")]
+    total = len(ips)
+    geo = _geolocate(ips[:200])
+    nodes, countries = [], {}
+    for ip in ips[:200]:
+        g = geo.get(ip)
+        if not g or g["lat"] is None:
+            continue
+        cc = g["cc"] or "?"
+        countries[cc] = countries.get(cc, 0) + 1
+        nodes.append({"lat": g["lat"], "lon": g["lon"], "ip": ip,
+                      "country": g["country"], "cc": cc, "as": g["as"]})
+    return {"nodes": nodes, "total": total, "shown": len(nodes),
+            "top_countries": sorted(countries.items(), key=lambda x: -x[1])[:8],
+            "updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
+
+
 def main():
     snap = {
         "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
@@ -751,6 +829,8 @@ def main():
     satellites = run("celestrak", get_satellites, [])
     sky_data = run("sky", sky.compute, {})
     cyber = run("cyber", get_cyber, {})
+    ransomware = run("ransomware", get_ransomware, {})
+    tor = run("tor", get_tor, {})
 
     snap["quakes"] = quakes
     snap["hazards"] = hazards
@@ -771,6 +851,8 @@ def main():
     snap["satellites"] = satellites
     snap["sky"] = sky_data
     snap["cyber"] = cyber
+    snap["ransomware"] = ransomware
+    snap["tor"] = tor
     snap["stress"] = compute_stress(quakes, hazards, space, indices, crypto)
     snap["feed"] = build_feed(quakes, hazards, space, news)
 
@@ -798,6 +880,8 @@ def main():
         "satellites": len(satellites),
         "cyber_attackers": len(cyber.get("attackers", [])),
         "cyber_c2": len(cyber.get("c2", [])),
+        "ransomware_victims": ransomware.get("count", 0),
+        "tor_exits": tor.get("total", 0),
     }
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
