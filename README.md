@@ -43,6 +43,7 @@ single click — a *lens*. It's built to be:
 | 🛰️ **1,700+ live satellites** | Real Celestrak orbital elements propagated in-browser with **SGP4**. Click one to trace its live orbit and next overhead pass. |
 | 🌦️ **Weather & hazards** | USGS earthquakes, NASA EONET + **GDACS** severity-scored disasters (pulsing rings), global wind / temp / precip / cloud / humidity / pressure, and air quality. |
 | ✈️ **Live flights** | Thousands of real aircraft with callsign, type & altitude. |
+| 🛡️ **Cyber threat watch** | Live attack sources (SANS ISC / DShield honeypots), online botnet C2 servers (abuse.ch Feodo Tracker), and vulnerabilities being **actively exploited** (CISA KEV) — as pulsing red nodes and animated attack arcs, plus a transparent 0–100 threat level. |
 | 🪐 **Solar system & sky** | Sun, Moon and planets as sun-lit textured spheres (Saturn's rings, lunar phase) in their true sky directions, plus constellations and a real star field. On-device astronomy → live **zodiac & moon phase**. |
 | 🔭 **Lenses** | One click isolates a *correlated* dataset: Seismic · Weather · Fire-risk · Air · Aviation · Orbital · Threats · Energy · Agri · Metals & chips · Shipping · Macro. |
 | 💹 **Trade Desk** | Live commodities, rates & FX; curated commodity **supply nodes** that glow red when hazards/weather threaten them; and **animated trade-flow arcs** (oil, grain, metals, chips). |
@@ -106,6 +107,10 @@ no server, no database, and no account.
 | [adsb.lol](https://adsb.lol/) | Live aircraft |
 | [NOAA SWPC](https://www.swpc.noaa.gov/) | Space weather (Kp index) |
 | [Celestrak](https://celestrak.org/) | Satellite orbital elements (TLE) |
+| [SANS ISC / DShield](https://isc.sans.edu/) | Top attacking source IPs + ports under attack (honeypots) |
+| [abuse.ch Feodo Tracker](https://feodotracker.abuse.ch/) | Online botnet command-and-control servers |
+| [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) | Vulnerabilities being actively exploited in the wild |
+| [ip-api.com](https://ip-api.com/) | Geolocation of attacker IPs (keyless batch) |
 | [Yahoo Finance](https://finance.yahoo.com/) | Indices, commodities, rates, FX |
 | [CoinGecko](https://www.coingecko.com/) | Crypto |
 

@@ -119,6 +119,7 @@
     <input id="search" placeholder="Fly to a country…" autocomplete="off" spellcheck="false"></div>
   <div class="tb-links">
     <span class="cbtn" onclick="showBrief()">◎ Situation Brief</span>
+    <span class="cbtn" onclick="showCyber()" style="background:linear-gradient(135deg,#ef4444,#fb923c)">🛡️ Cyber</span>
     <span class="cbtn" onclick="showTrade()" style="background:linear-gradient(135deg,#34d399,#38bdf8)">💹 Trade Desk</span>
     <a class="solid" id="liteBtn" onclick="toggleLite()" style="cursor:pointer" title="Trim bloom + satellites for weak devices">⚡ Lite</a>
     <a class="solid" onclick="showHelp()" style="cursor:pointer">? Help</a>
@@ -183,6 +184,10 @@ const GROUPS=[
   {name:"Aviation",items:[
     {id:"flights",label:"Flights",col:"#38bdf8"},
     {id:"mil",label:"Military",col:"#f87171"}]},
+  {name:"Cyber threat",items:[
+    {id:"cyber_src",label:"Attack sources",col:"#ff4d4d"},
+    {id:"cyber_arcs",label:"Attack streams",col:"#ff7849"},
+    {id:"cyber_c2",label:"Botnet C2",col:"#c084fc"}]},
   {name:"Trade & supply",items:[
     {id:"nodes_energy",label:"Energy nodes",col:"#fb923c"},
     {id:"nodes_metals",label:"Metals & mining",col:"#a8b3c4"},
@@ -205,7 +210,8 @@ const GROUPS=[
 const on={quake:true,hazard:true,wind:true,temp:false,precip:false,clouds:false,humidity:false,
   pressure:false,cloudveil:true,air:false,flights:false,mil:false,sats:true,planets:true,sunmoon:true,
   constel:false,stars:true,cities:false,iss:true,ziggy:true,
-  gdacs:true,nodes_energy:false,nodes_metals:false,nodes_chips:false,nodes_agri:false,chokepoints:false,traderoutes:false};
+  gdacs:true,nodes_energy:false,nodes_metals:false,nodes_chips:false,nodes_agri:false,chokepoints:false,traderoutes:false,
+  cyber_src:false,cyber_arcs:false,cyber_c2:false};
 /* per-planet colours + emoji (astro glyphs tofu in the WebGL label font, so use emoji) */
 const PLANET_COL={Mercury:"#cbd5e1",Venus:"#fde68a",Mars:"#f87171",Jupiter:"#fbbf24",
   Saturn:"#fcd34d",Uranus:"#67e8f9",Neptune:"#60a5fa",Pluto:"#d6a06a"};
@@ -593,6 +599,15 @@ function buildPoints(){
   if(on.chokepoints)for(const c of CHOKEPOINTS){const [nm,lat,lon,note]=c;
     pts.push({lat,lng:lon,type:"choke",color:"#f472b6",r:.34,alt:.02,raw:{name:nm,note,lat,lon},
       label:`🚢 ${esc(nm)}<br><span style="color:#8fa0bd">${esc(note)}</span>`});}
+  // --- cyber threat: live attack sources (DShield) + botnet C2 (Feodo) ---
+  const CY=DATA.cyber||{};
+  if(on.cyber_src)for(const a of CY.attackers||[]){
+    const r=Math.min(.6,.18+Math.log10((a.reports||1)+1)*.07);
+    pts.push({lat:a.lat,lng:a.lon,type:"cyberatk",color:"#ff3b3b",r,alt:.03,raw:a,
+      label:`🛑 Attack source · ${esc(a.country||a.cc||"?")}<br><span style="color:#8fa0bd">${(a.reports||0).toLocaleString()} reports</span>`});}
+  if(on.cyber_c2)for(const c of CY.c2||[]){
+    pts.push({lat:c.lat,lng:c.lon,type:"cyberc2",color:"#c084fc",r:.3,alt:.032,raw:c,
+      label:`🕷️ ${esc(c.malware||"botnet")} C2 · ${esc(c.country||c.cc||"?")}`});}
   return pts;
 }
 function buildRings(){ // pulsing rings — strong quakes (amber) + GDACS severity alerts (orange/red)
@@ -600,11 +615,15 @@ function buildRings(){ // pulsing rings — strong quakes (amber) + GDACS severi
   if(DATA&&on.quake)for(const q of (DATA.quakes||[]).filter(q=>q.mag>=5).slice(0,10))r.push({lat:q.lat,lng:q.lon,rgb:"251,191,36",max:5,period:900});
   if(DATA&&on.gdacs)for(const d of (DATA.gdacs||[]).filter(x=>x.sev>=2).slice(0,16))r.push({lat:d.lat,lng:d.lon,rgb:d.sev>=3?"239,68,68":"251,146,60",max:7,period:d.sev>=3?600:800});
   if(on.ziggy)for(const pz of PRESENCES)r.push({lat:pz.lat,lng:pz.lon,rgb:"56,189,248",max:4,period:1500});  // presence beacon pulse
+  if(on.cyber_src&&DATA)for(const a of (DATA.cyber?.attackers||[]).slice(0,12))r.push({lat:a.lat,lng:a.lon,rgb:"255,59,59",max:4,period:520});  // fast red attack pulse
   return r;
 }
-function buildArcs(){ // animated commodity trade-flow arcs
-  if(!on.traderoutes)return[];
-  return TRADE_ROUTES.map(r=>({label:r[0],sLat:r[1],sLng:r[2],eLat:r[3],eLng:r[4],color:SECTOR_COL[r[5]]||"#22d3ee"}));
+function buildArcs(){ // animated commodity trade-flow arcs + cyber attack streams
+  const out=[];
+  if(on.traderoutes)for(const r of TRADE_ROUTES)out.push({label:r[0],sLat:r[1],sLng:r[2],eLat:r[3],eLng:r[4],color:SECTOR_COL[r[5]]||"#22d3ee"});
+  if(on.cyber_arcs&&DATA&&DATA.cyber)for(const a of DATA.cyber.arcs||[])
+    out.push({label:`⚡ attack → ${esc(a.hub||"hub")}`,sLat:a.slat,sLng:a.slon,eLat:a.dlat,eLng:a.dlon,color:"#ff4d4d",cyber:true});
+  return out;
 }
 function buildPaths(){ // wind streamlines (animated) + constellation lines (solid, on sky shell)
   const out=[];
@@ -737,6 +756,10 @@ function showMarker(p){
     P.b.innerHTML=h;openPanel();return;
   }else if(p.type==="presence"){P.em.textContent="⚡";P.t.textContent=esc(r.name);P.s.textContent=(r.type||"presence")+" · on Earth";
     P.b.innerHTML=kv("Location",esc(r.note||""))+kv("Coordinates",r.lat+", "+r.lon)+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A presence beacon. Add your own devices &amp; people via <code>window.WORLDLENS</code> — an always-on map of everything, everywhere.</p>`;openPanel();return;
+  }else if(p.type==="cyberatk"){P.em.textContent="🛑";P.t.textContent="Attack source";P.s.textContent="SANS ISC / DShield · honeypot";
+    P.b.innerHTML=kv("Origin",esc(r.country||r.cc||"?"))+kv("IP",esc(r.ip))+kv("Network",esc(r.as||"—"))+kv("Reports (24h)",(r.reports||0).toLocaleString())+kv("Distinct targets",r.targets||"—")+kv("Coordinates",r.lat.toFixed(1)+", "+r.lon.toFixed(1))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A top source hitting DShield's global honeypot network. Streams arc toward major internet hubs (illustrative targets — real victims aren't public).</p>`;openPanel();return;
+  }else if(p.type==="cyberc2"){P.em.textContent="🕷️";P.t.textContent=esc(r.malware||"Botnet")+" C2";P.s.textContent="abuse.ch Feodo Tracker · online";
+    P.b.innerHTML=kv("Malware family",esc(r.malware||"—"))+kv("Country",esc(r.country||r.cc||"?"))+kv("IP",esc(r.ip))+kv("Port",r.port||"—")+kv("Network",esc(r.as||"—"))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A live command-and-control server directing infected machines. Source: abuse.ch, confirmed online.</p>`;openPanel();return;
   }else if(p.type==="choke"){P.em.textContent="🚢";P.t.textContent=esc(r.name);P.s.textContent="maritime chokepoint";
     P.b.innerHTML=kv("Significance",esc(r.note))+kv("Location",r.lat.toFixed(1)+", "+r.lon.toFixed(1))+`<p style="color:var(--muted);font-size:12px;margin-top:12px">A disruption here (weather, conflict, blockage) ripples through global freight and commodity prices.</p>`;openPanel();return;
   }else if(p.type==="sat"){P.em.textContent="🛰️";P.t.textContent=esc(r.name);P.s.textContent=r.group+" · Celestrak · live orbit";
@@ -825,7 +848,8 @@ function renderKPIs(){
      <div class="kpi"><div class="kl">Quakes 24h</div><div class="kv">${c.quakes_24h??"—"} <small>${c.quakes_sig??0}≥4.5</small></div></div>
      <div class="kpi"><div class="kl">Hazards</div><div class="kv">${c.hazards??"—"}</div></div>
      <div class="kpi"><div class="kl">Satellites</div><div class="kv">${(SAT_OBJS.length||c.satellites)??"—"}</div></div>
-     <div class="kpi"><div class="kl">Flights</div><div class="kv">${g.flights_tracked??c.flights??"—"}</div></div>`;
+     <div class="kpi"><div class="kl">Flights</div><div class="kv">${g.flights_tracked??c.flights??"—"}</div></div>
+     ${DATA.cyber?`<div class="kpi" onclick="showCyber()" style="cursor:pointer"><div class="kl">Cyber</div><div class="kv" style="color:${DATA.cyber.level>=70?'#ef4444':DATA.cyber.level>=45?'#fb923c':'#34d399'}">${DATA.cyber.level??"—"} <small>lvl</small></div></div>`:""}`;
 }
 function renderStatus(){
   if(!DATA)return;const c=DATA.counts||{};
@@ -881,6 +905,29 @@ function showBrief(){
     mkts.map(m=>`${m.name||m.symbol} <b class="${m.chg_pct>=0?'up':'down'}">${m.chg_pct>=0?'+':''}${m.chg_pct}%</b>`).join(" · ")+`</div>`;
   if(sk.sun)h+=`<div class="mini">✨ Sky</div>`+kv("Sun",sk.sun.sign_glyph+" "+sk.sun.sign+" "+sk.sun.deg+"°")+kv("Moon",(sk.moon?.phase_emoji||"")+" "+(sk.moon?.phase||"")+" · "+(sk.moon?.illum||0)+"%");
   h+=`<p style="color:var(--muted);font-size:11px;margin-top:14px">Synthesized from live keyless feeds · read-only.</p>`;
+  P.b.innerHTML=h;openPanel();
+}
+function showCyber(){
+  const cy=(DATA&&DATA.cyber)||{};
+  P.em.textContent="🛡️";P.t.textContent="Cyber Threat Watch";P.s.textContent="DShield · Feodo · CISA KEV · keyless";
+  if(!DATA||cy.level==null){P.b.innerHTML=`<p class="muted">No cyber snapshot yet — the collector runs periodically.</p>`;openPanel();return;}
+  const lvl=cy.level,lc=lvl>=70?"#ef4444":lvl>=45?"#fb923c":"#34d399",lb=lvl>=70?"Elevated":lvl>=45?"Guarded":"Low";
+  let h=`<div class="cards">`+
+    card("Threat level",`<span style="color:${lc}">${lvl}</span>`,lb)+
+    card("Attack sources",cy.counts?.attackers??"—","live honeypot")+
+    card("Botnet C2 online",cy.counts?.c2??"—","abuse.ch")+`</div>`;
+  h+=`<div class="btn" style="cursor:pointer;text-align:center" onclick="window.__cyberlens()">🛡️ Show cyber layer on globe</div>`;
+  const ports=cy.ports||[];
+  if(ports.length){h+=`<div class="mini">🎯 Top ports under attack</div><div style="font-size:12.5px;line-height:1.95">`+
+    ports.map(p=>`<span class="lay" style="display:inline-flex;margin:0 6px 6px 0;padding:3px 9px">:${p.port} <b style="margin-left:6px">${(p.records||0).toLocaleString()}</b></span>`).join("")+`</div>`;}
+  const atk=cy.attackers||[];
+  if(atk.length){const byC={};for(const a of atk){const k=a.country||a.cc||"?";byC[k]=(byC[k]||0)+1;}
+    h+=`<div class="mini">🌐 Where attacks originate</div><div style="font-size:12.5px;line-height:1.9">`+
+    Object.entries(byC).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,n])=>`${esc(k)} <b>${n}</b>`).join(" · ")+`</div>`;}
+  const kev=cy.kev||[];
+  if(kev.length){h+=`<div class="mini">🔓 Actively exploited (CISA KEV · ${cy.kev_recent7||0} added this week)</div>`;
+    for(const v of kev.slice(0,6))h+=`<div class="ev"><div class="ic">${v.ransomware==='Known'?'💀':'🔓'}</div><div><div class="tx">${esc(v.vendor||"")} ${esc(v.product||"")}</div><div class="mt">${esc(v.cve||"")} · added ${esc(v.added||"")}</div></div></div>`;}
+  h+=`<p style="color:var(--muted);font-size:11px;margin-top:14px">Real keyless intel: SANS ISC honeypots, abuse.ch botnet tracking, CISA's exploited-vuln catalog. Attack arcs terminate at major internet hubs (illustrative targets — actual victims aren't public). Read-only.</p>`;
   P.b.innerHTML=h;openPanel();
 }
 function showHelp(){
@@ -941,7 +988,7 @@ function flyHome(){const z=PRESENCES[0];if(z&&globe){on.ziggy=true;syncAll();
   setTimeout(()=>showMarker({type:"presence",raw:z}),1400);}}
 function toggleRail(){const r=document.querySelector(".rail");if(!r)return;r.classList.toggle("collapsed");
   try{localStorage.setItem("wg_rail",r.classList.contains("collapsed")?"1":"0");}catch(e){}}
-Object.assign(window,{showBrief,showHelp,showTrade,flyHome,toggleRail,toggleLite,allLayers,trackISS:()=>{const i=findISS();if(i)selectSat(i);return !!i;}});
+Object.assign(window,{showBrief,showCyber,showHelp,showTrade,flyHome,toggleRail,toggleLite,allLayers,__cyberlens:()=>applyLens("cyber"),trackISS:()=>{const i=findISS();if(i)selectSat(i);return !!i;}});
 
 /* ---------- view ---------- */
 // pointOfView's built-in transition is broken under the module/bloom render loop, so animate manually.
@@ -984,6 +1031,8 @@ const LENSES=[
    on:["chokepoints","traderoutes","flights","hazard","wind","stars"]},
   {id:"macro",icon:"💹",label:"Macro",desc:"whole supply map + disruptions + markets readout",
    on:["nodes_energy","nodes_metals","nodes_chips","nodes_agri","chokepoints","traderoutes","gdacs","hazard","wind","stars"]},
+  {id:"cyber",icon:"🛡️",label:"Cyber",desc:"live attack sources, botnet C2 & attack streams (DShield · Feodo · CISA KEV)",
+   on:["cyber_src","cyber_arcs","cyber_c2","stars","cloudveil"]},
 ];
 let ACTIVE_LENS="overview";
 function applyLens(id){

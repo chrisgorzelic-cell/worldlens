@@ -579,6 +579,143 @@ def get_hamqsl():
             "hf_good": hf_good, "updated": g("updated")}
 
 
+# ---- cyber threat layer (all keyless): DShield honeypots + Feodo C2 + CISA KEV ----
+# Major internet-exchange / cloud hubs used as illustrative attack *targets* for the
+# arcs. We genuinely know the attack SOURCES (DShield); the specific victims are not
+# public, so arcs terminate at real internet hubs and the panel labels them as such.
+CYBER_HUBS = [
+    ("Ashburn, US", 39.04, -77.49), ("Frankfurt, DE", 50.11, 8.68),
+    ("Amsterdam, NL", 52.37, 4.90), ("London, UK", 51.51, -0.13),
+    ("Singapore", 1.35, 103.82), ("Tokyo, JP", 35.68, 139.69),
+    ("San Jose, US", 37.34, -121.89), ("Sao Paulo, BR", -23.55, -46.63),
+]
+
+
+def _geolocate(ips):
+    """Keyless IP->{lat,lon,country,cc,as} via ip-api.com batch (<=100/call)."""
+    out = {}
+    ips = list(dict.fromkeys(ips))
+    fields = "status,country,countryCode,lat,lon,query,as"
+    for i in range(0, len(ips), 100):
+        chunk = [{"query": ip} for ip in ips[i:i + 100]]
+        req = urllib.request.Request(
+            "http://ip-api.com/batch?fields=" + fields,
+            data=json.dumps(chunk).encode(),
+            headers={"User-Agent": UA, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            rows = json.loads(r.read().decode("utf-8", "replace"))
+        for row in rows:
+            if row.get("status") == "success":
+                out[row["query"]] = {
+                    "lat": row.get("lat"), "lon": row.get("lon"),
+                    "country": row.get("country"), "cc": row.get("countryCode"),
+                    "as": row.get("as")}
+    return out
+
+
+def get_cyber():
+    """Live cyber-threat layer from keyless feeds.
+    - SANS ISC / DShield: top attacking source IPs + top attacked ports (honeypot data)
+    - abuse.ch Feodo Tracker: online botnet C2 servers + malware family
+    - CISA KEV: vulnerabilities being actively exploited in the wild
+    """
+    attackers, c2, ports, kev = [], [], [], []
+
+    raw_ips = []
+    try:
+        for it in fetch("https://isc.sans.edu/api/topips/records/40?json"):
+            src = it.get("source")
+            if src:
+                raw_ips.append({"ip": src, "reports": int(it.get("reports") or 0),
+                                "targets": int(it.get("targets") or 0)})
+    except Exception:
+        pass
+
+    try:
+        for k, v in fetch("https://isc.sans.edu/api/topports/records/10?json").items():
+            if isinstance(v, dict) and "targetport" in v:
+                ports.append({"port": int(v["targetport"]),
+                              "records": int(v.get("records") or 0),
+                              "sources": int(v.get("sources") or 0),
+                              "targets": int(v.get("targets") or 0)})
+        ports.sort(key=lambda p: -p["records"])
+    except Exception:
+        pass
+
+    raw_c2 = []
+    try:
+        rows = fetch("https://feodotracker.abuse.ch/downloads/ipblocklist.json")
+        for r in [r for r in rows if str(r.get("status", "")).lower() == "online"][:80]:
+            ip = r.get("ip_address")
+            if ip:
+                raw_c2.append({"ip": ip, "malware": r.get("malware") or "botnet",
+                               "port": r.get("port"), "as": r.get("as_name"),
+                               "cc": r.get("country")})
+    except Exception:
+        pass
+
+    kev_recent7 = 0
+    try:
+        vulns = fetch("https://www.cisa.gov/sites/default/files/feeds/"
+                      "known_exploited_vulnerabilities.json").get("vulnerabilities") or []
+        vulns.sort(key=lambda x: x.get("dateAdded", ""), reverse=True)
+        today = datetime.date.today()
+        for v in vulns:
+            try:
+                if (today - datetime.date.fromisoformat(v.get("dateAdded", ""))).days <= 7:
+                    kev_recent7 += 1
+            except Exception:
+                pass
+        for v in vulns[:16]:
+            kev.append({"cve": v.get("cveID"), "vendor": v.get("vendorProject"),
+                        "product": v.get("product"), "name": v.get("vulnerabilityName"),
+                        "added": v.get("dateAdded"),
+                        "ransomware": v.get("knownRansomwareCampaignUse")})
+    except Exception:
+        pass
+
+    geo = _geolocate([a["ip"] for a in raw_ips] + [c["ip"] for c in raw_c2])
+
+    def nearest_hub(lat, lon):
+        best, bd = CYBER_HUBS[0], 1e18
+        for name, hlat, hlon in CYBER_HUBS:
+            d = (lat - hlat) ** 2 + (lon - hlon) ** 2
+            if 5 < d < bd:
+                bd, best = d, (name, hlat, hlon)
+        return best
+
+    arcs = []
+    for a in raw_ips:
+        g = geo.get(a["ip"])
+        if not g or g["lat"] is None:
+            continue
+        attackers.append({"lat": g["lat"], "lon": g["lon"], "ip": a["ip"],
+                          "country": g["country"], "cc": g["cc"], "as": g["as"],
+                          "reports": a["reports"], "targets": a["targets"]})
+        if len(arcs) < 24:
+            hn, hlat, hlon = nearest_hub(g["lat"], g["lon"])
+            arcs.append({"slat": g["lat"], "slon": g["lon"], "dlat": hlat,
+                         "dlon": hlon, "hub": hn, "cc": g["cc"], "reports": a["reports"]})
+    for c in raw_c2:
+        g = geo.get(c["ip"])
+        if not g or g["lat"] is None:
+            continue
+        c2.append({"lat": g["lat"], "lon": g["lon"], "ip": c["ip"],
+                   "malware": c["malware"], "port": c["port"],
+                   "country": g["country"] or c["cc"], "cc": g["cc"] or c["cc"],
+                   "as": c["as"]})
+
+    top_reports = sum(a["reports"] for a in attackers[:10])
+    level = clamp(round(min(50, top_reports / 40000.0 * 50) +
+                        min(30, len(c2) * 0.5) + min(20, kev_recent7 * 2)), 0, 100)
+
+    return {"level": level, "attackers": attackers, "c2": c2, "arcs": arcs,
+            "ports": ports[:8], "kev": kev, "kev_recent7": kev_recent7,
+            "counts": {"attackers": len(attackers), "c2": len(c2),
+                       "kev_total": len(kev), "kev_7d": kev_recent7},
+            "updated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
+
+
 def main():
     snap = {
         "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
@@ -612,7 +749,8 @@ def main():
     air = run("airquality", get_air_grid, [])
     flights = run("adsb", get_flights, [])
     satellites = run("celestrak", get_satellites, [])
-    sky = run("sky", sky.compute, {})
+    sky_data = run("sky", sky.compute, {})
+    cyber = run("cyber", get_cyber, {})
 
     snap["quakes"] = quakes
     snap["hazards"] = hazards
@@ -631,7 +769,8 @@ def main():
     snap["air_grid"] = air
     snap["flights"] = flights
     snap["satellites"] = satellites
-    snap["sky"] = sky
+    snap["sky"] = sky_data
+    snap["cyber"] = cyber
     snap["stress"] = compute_stress(quakes, hazards, space, indices, crypto)
     snap["feed"] = build_feed(quakes, hazards, space, news)
 
@@ -657,6 +796,8 @@ def main():
         "air_pts": len(air),
         "flights": len(flights),
         "satellites": len(satellites),
+        "cyber_attackers": len(cyber.get("attackers", [])),
+        "cyber_c2": len(cyber.get("c2", [])),
     }
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
