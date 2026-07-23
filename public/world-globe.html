@@ -462,6 +462,16 @@ function buildCyberObjs(){
   for(const v of (DATA.ransomware?.victims)||[])CYBER_OBJS.push({lat:v.lat,lng:v.lon,alt:.038,ckey:"cyber_ransom",layer:"cyberransom",raw:v,label:`💀 ${esc(v.group)} → ${esc(v.victim)}`,mesh:emojiSprite("💀",3.0)});
   for(const n of (DATA.tor?.nodes)||[])CYBER_OBJS.push({lat:n.lat,lng:n.lon,alt:.03,ckey:"cyber_tor",layer:"cybertor",raw:n,label:`🧅 Tor exit · ${esc(n.country||n.cc||"?")}`,mesh:emojiSprite("🧅",2.0)});
 }
+/* commodity supply nodes + maritime chokepoints as emoji icons (no more bars) */
+let TRADE_OBJS=[];
+function buildTradeObjs(){
+  TRADE_OBJS=[];
+  if(typeof THREE==="undefined")return;
+  for(const n of SUPPLY_NODES){const [nm,sec,lat,lon]=n;const risk=NODE_RISK[nm];
+    TRADE_OBJS.push({lat,lng:lon,alt:.03,tkey:"nodes_"+sec,layer:"node",raw:{name:nm,sec,lat,lon,risk},label:`${SECTOR_ICON[sec]||"📍"} ${esc(nm)}${risk?" — ⚠️ AT RISK":""}`,mesh:emojiSprite(SECTOR_ICON[sec]||"📍",risk?3.6:2.8)});}
+  for(const c of CHOKEPOINTS){const [nm,lat,lon,note]=c;
+    TRADE_OBJS.push({lat,lng:lon,alt:.02,tkey:"chokepoints",layer:"choke",raw:{name:nm,note,lat,lon},label:`⚓ ${esc(nm)}`,mesh:emojiSprite("⚓",2.8)});}
+}
 /* --- satellite orbit trail (SGP4 sampled ~1 orbit, split at the dateline) --- */
 let SEL_SAT=null, ORBIT_SEGS=[];
 function computeOrbit(d){
@@ -592,6 +602,7 @@ function updateObjects(){
   }
   for(const m of MARKER_GLOWS)if((m.layer==="quake"&&on.quake)||(m.layer==="hazard"&&on.hazard)||(m.layer==="gdacs"&&on.gdacs))objs.push(m);
   for(const o of CYBER_OBJS)if(on[o.ckey])objs.push(o);
+  for(const o of TRADE_OBJS)if(on[o.tkey])objs.push(o);
   for(const c of CELEST){
     if(c.lat==null)continue;
     if((c.kind!=="planet"&&on.sunmoon)||(c.kind==="planet"&&on.planets))objs.push(c);
@@ -637,13 +648,7 @@ function buildPoints(){
   if(on.news)for(const n of DATA.news_hotspots||[])pts.push({lat:n.lat,lng:n.lon,type:"news",color:"#60a5fa",r:Math.min(.5,.14+Math.log10((n.count||1)+1)*.14),alt:.028,raw:n,label:`📰 ${esc(n.name)} (${n.count})`});
   if(on.iss&&DATA.iss)pts.push({lat:DATA.iss.lat,lng:DATA.iss.lon,type:"iss",color:"#a78bfa",r:.34,alt:.035,raw:DATA.iss,label:"🛰️ ISS — live position"});
   if(on.ziggy)for(const pz of PRESENCES)pts.push({lat:pz.lat,lng:pz.lon,type:"presence",color:pz.color||"#38bdf8",r:.55,alt:.04,raw:pz,label:`⚡ ${esc(pz.name)} — ${esc(pz.note||"")}`});
-  // commodity supply nodes (per-sector) — at-risk nodes glow red; chokepoints
-  for(const n of SUPPLY_NODES){const [nm,sec,lat,lon]=n;if(!on["nodes_"+sec])continue;
-    const risk=NODE_RISK[nm];pts.push({lat,lng:lon,type:"node",color:risk?"#ef4444":SECTOR_COL[sec],r:risk?.42:.24,alt:.03,
-      raw:{name:nm,sec,lat,lon,risk},label:`${SECTOR_ICON[sec]} ${esc(nm)}${risk?" — ⚠️ AT RISK":""}`});}
-  if(on.chokepoints)for(const c of CHOKEPOINTS){const [nm,lat,lon,note]=c;
-    pts.push({lat,lng:lon,type:"choke",color:"#f472b6",r:.34,alt:.02,raw:{name:nm,note,lat,lon},
-      label:`🚢 ${esc(nm)}<br><span style="color:#8fa0bd">${esc(note)}</span>`});}
+  // supply nodes + chokepoints render as emoji icons in buildTradeObjs (no bars)
   // cyber threat markers render as 3D icons in buildCyberObjs (threat-blip / 🕷️ / 💀 / 🧅)
   return pts;
 }
@@ -653,6 +658,7 @@ function buildRings(){ // pulsing rings — strong quakes (amber) + GDACS severi
   if(DATA&&on.gdacs)for(const d of (DATA.gdacs||[]).filter(x=>x.sev>=2).slice(0,16))r.push({lat:d.lat,lng:d.lon,rgb:d.sev>=3?"239,68,68":"251,146,60",max:7,period:d.sev>=3?600:800});
   if(on.ziggy)for(const pz of PRESENCES)r.push({lat:pz.lat,lng:pz.lon,rgb:"56,189,248",max:4,period:1500});  // presence beacon pulse
   if(on.cyber_src&&DATA)for(const a of (DATA.cyber?.attackers||[]).slice(0,12))r.push({lat:a.lat,lng:a.lon,rgb:"255,59,59",max:4,period:520});  // fast red attack pulse
+  for(const n of SUPPLY_NODES){const [nm,sec,lat,lon]=n;if(on["nodes_"+sec]&&NODE_RISK[nm])r.push({lat,lng:lon,rgb:"239,68,68",max:5,period:720});}  // at-risk supply node
   return r;
 }
 function buildArcs(){ // animated commodity trade-flow arcs + cyber attack streams
@@ -1212,7 +1218,7 @@ async function init(){
   updateSun();
   addClouds();
   applyStars();
-  buildSatObjs();buildMarkerGlows();buildCyberObjs();buildCelestial();propagateSats();updateObjects();startTwinkle();
+  buildSatObjs();buildMarkerGlows();buildCyberObjs();buildTradeObjs();buildCelestial();propagateSats();updateObjects();startTwinkle();
   globe.controls().autoRotate=true;globe.controls().autoRotateSpeed=.4;
   globe.controls().addEventListener("start",()=>globe.controls().autoRotate=false);
   globe.pointOfView({lat:20,lng:0,altitude:2.5});
@@ -1237,7 +1243,7 @@ async function init(){
   },1500);
   setInterval(()=>{renderStatus();updateSun();},1000);  // live UTC clock + ISS readout + moving terminator
   // data refresh: new feeds + fresh TLEs
-  setInterval(async()=>{try{const s=await fetch("/world-status.json?t="+Date.now()).then(r=>r.json());DATA=s;computeCountryCounts();computeSupplyRisk();buildSatObjs();buildMarkerGlows();buildCyberObjs();buildCelestial();propagateSats();updateObjects();renderStress();refresh();}catch(e){}},120000);
+  setInterval(async()=>{try{const s=await fetch("/world-status.json?t="+Date.now()).then(r=>r.json());DATA=s;computeCountryCounts();computeSupplyRisk();buildSatObjs();buildMarkerGlows();buildCyberObjs();buildTradeObjs();buildCelestial();propagateSats();updateObjects();renderStress();refresh();}catch(e){}},120000);
 }
 let _starsSet=null;
 function applyStars(){if(!globe)return;const want=on.stars;if(want===_starsSet)return;_starsSet=want;globe.backgroundImageUrl(want?NIGHT_SKY:null);}
